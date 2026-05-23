@@ -9,6 +9,7 @@ const props = defineProps<{
   generating?: boolean;
   error?: string | null;
   demLabel?: string;
+  assemblyLabel?: string;
 }>();
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
@@ -327,6 +328,7 @@ onUnmounted(() => {
       {{ demLabel }}
       <span v-if="trailMesh"> · 红=轨迹</span>
       <span v-if="trayMesh"> · 灰=托盘</span>
+      <span v-if="assemblyLabel"> · {{ assemblyLabel }}</span>
     </div>
   </div>
 </template>

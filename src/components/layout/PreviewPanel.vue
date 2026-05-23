@@ -41,6 +41,25 @@ const demLabel = computed(() => {
   return `${src} · ${lastResult.value.generationMs}ms`;
 });
 
+const assemblyLabel = computed(() => {
+  const a = config.value.assembly;
+  const parts = [
+    `轨迹槽 +${a.trailToleranceMm}mm`,
+    `底座槽 +${a.trayToleranceMm}mm`,
+  ];
+  if (a.magnet.enabled) {
+    const holes: string[] = [];
+    if (a.magnet.snapFitHole) holes.push("拼接孔");
+    if (a.magnet.fridgeMagnetHole) holes.push("冰箱贴孔");
+    parts.push(
+      holes.length
+        ? `磁铁 Ø${a.magnet.diameterMm}×${a.magnet.thicknessMm}mm（${holes.join("、")}）`
+        : `磁铁 Ø${a.magnet.diameterMm}×${a.magnet.thicknessMm}mm`,
+    );
+  }
+  return parts.join(" · ");
+});
+
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
@@ -110,6 +129,7 @@ async function onDrop(e: DragEvent): Promise<void> {
         :generating="generating"
         :error="previewError"
         :dem-label="mesh || trayMesh ? demLabel : undefined"
+        :assembly-label="mesh || trayMesh ? assemblyLabel : undefined"
       />
 
       <div

@@ -15,6 +15,7 @@ import {
   buildTrailGrooveSpec,
   buildTrailLinePolyline,
 } from "./trail-pipeline";
+import { applyTerrainSnapFitHoles } from "../assembly/apply-magnet-holes";
 
 const GRID_MAX = 72;
 const GRID_MIN = 24;
@@ -98,13 +99,14 @@ export async function generateTerrainMain(
 
   applyGrooveToHeightField(heightMm, cols, rows, crop, groove);
 
-  const mesh: TerrainMeshPayload = buildTerrainMainMesh({
+  let mesh: TerrainMeshPayload = buildTerrainMainMesh({
     crop,
     heightMm,
     cols,
     rows,
     baseThicknessMm: config.terrain.baseSolidThicknessMm,
   });
+  mesh = applyTerrainSnapFitHoles(mesh, config);
 
   const polylineMm = buildTrailLinePolyline(config, crop);
   let trailMesh: TerrainMeshPayload | null = null;

@@ -16,6 +16,13 @@ GPX 点 `(lat, lon)` 映射到与 `Terrain_Main` 相同的模型平面 (mm)：
 - 轨迹底面 Z：`zTop - trailDepthMm`
 - 主模型挖槽：在高度场网格上，距折线水平距离 ≤ `(trailWidth + 2×trailTolerance) / 2` 的格点降低 `trailDepthMm`
 
-## 装配公差（任务-06 入口）
+## 装配公差（任务-06）
 
-- `config.assembly.trailToleranceMm` 仅扩大凹槽宽度，不改变轨迹实体宽度
+- `config.assembly.trailToleranceMm` 仅扩大凹槽宽度：`trailWidth + 2×tolerance`，不改变 `Trail_Line` 实体宽度
+- `config.assembly.trayToleranceMm` 扩大托盘凹槽相对主模型外轮廓
+
+## 磁铁孔（任务-06）
+
+- `config.assembly.magnet.enabled === false` 时不生成任何孔
+- **拼接孔**（`snapFitHole`）：`computeMagnetHoleLayout` 在模型平面给出 4 个配对 XY；主模型自 `bottomZ` 向上、托盘凹槽底自 `floorZ` 向下各挖 `thicknessMm` 深
+- **冰箱贴孔**（`fridgeMagnetHole`）：托盘最底面 `z=0` 向上浅孔，孔心沿外轮廓内缩布置

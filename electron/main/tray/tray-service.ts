@@ -9,6 +9,7 @@ import { computeTrayFootprint } from "./tray-footprint";
 import { buildTrayBaseMesh } from "./tray-base-mesh";
 import { buildBorderTextMeshes } from "./border-text-mesh";
 import { mergeMeshPayloads } from "./mesh-merge";
+import { applyTrayMagnetHoles } from "../assembly/apply-magnet-holes";
 
 export async function generateTrayBase(
   req: TrayGenerateRequest,
@@ -42,7 +43,8 @@ export async function generateTrayBase(
     borderTextEnabled,
   );
 
-  const mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
+  let mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
+  mesh = applyTrayMagnetHoles(mesh, config);
 
   return {
     mesh,
