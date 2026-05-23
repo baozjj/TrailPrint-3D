@@ -35,11 +35,13 @@ const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
       <SegmentedControl v-model="config.mapCrop.shape" :options="shapeOptions" />
     </div>
 
+    <p class="field-hint">地图遮罩大小固定；下方 mm 尺寸仅用于生成 STL 模型。</p>
+
     <div class="row">
       <NumberField
         v-if="isCircle"
         v-model="config.mapCrop.radiusMm"
-        label="半径"
+        label="打印半径"
         suffix="mm"
         :min="10"
         :max="500"
@@ -47,14 +49,14 @@ const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
       <template v-if="isRectangle">
         <NumberField
           v-model="config.mapCrop.lengthMm"
-          label="长度"
+          label="打印长度"
           suffix="mm"
           :min="10"
           :max="500"
         />
         <NumberField
           v-model="config.mapCrop.widthMm"
-          label="宽度"
+          label="打印宽度"
           suffix="mm"
           :min="10"
           :max="500"
@@ -70,7 +72,7 @@ const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
         />
         <NumberField
           v-model="config.mapCrop.polygonSideLengthMm"
-          label="边长"
+          label="打印边长"
           suffix="mm"
           :min="10"
           :max="300"
@@ -89,6 +91,13 @@ const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
 
 .field-group__label {
   font-size: 12px;
+  color: var(--tp-text-secondary);
+}
+
+.field-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--tp-text-secondary);
 }
 

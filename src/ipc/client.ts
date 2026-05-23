@@ -1,5 +1,7 @@
 import { isIpcError, type IpcError } from '@shared/ipc/types'
 import type {
+  GpxParseRequest,
+  GpxParseResponse,
   PingRequest,
   PingResponse,
   TaskEnqueueRequest,
@@ -31,9 +33,13 @@ export async function ipcGetTaskStatus(
   return getApi().getTaskStatus(req)
 }
 
+export async function ipcParseGpx(req: GpxParseRequest): Promise<GpxParseResponse> {
+  return getApi().parseGpx(req)
+}
+
 export function formatIpcError(err: unknown): string {
   if (isIpcError(err)) {
-    return `[${err.code}] ${err.message}`
+    return err.message
   }
   if (err instanceof Error) {
     return err.message

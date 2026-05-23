@@ -3,7 +3,9 @@ import { ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useUiStore } from '@/stores/ui'
 import { useConfigStore } from '@/stores/config'
+import { useGpxImport } from '@/composables/useGpxImport'
 import { formatIpcError, ipcEnqueueTask } from '@/ipc/client'
+import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
 import TrailSection from '@/components/sections/TrailSection.vue'
@@ -13,23 +15,29 @@ import AssemblySection from '@/components/sections/AssemblySection.vue'
 const ui = useUiStore()
 const configStore = useConfigStore()
 const { generating, statusMessage } = storeToRefs(ui)
+const { importing, importFromFile } = useGpxImport()
 
 const fileInput = ref<HTMLInputElement | null>(null)
 
 function openGpxPicker(): void {
-  fileInput.value?.click()
+  if (!importing.value) fileInput.value?.click()
 }
 
-function onGpxSelected(e: Event): void {
+async function onGpxSelected(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
-  configStore.config.gpx.imported = true
-  configStore.config.gpx.trackName = file.name.replace(/\.gpx$/i, '')
-  statusMessage.value = `已选择 ${file.name}（解析逻辑待任务-01 接入）`
+  const ok = await importFromFile(file)
+  if (ok) {
+    ui.previewMode = '2d'
+  }
   ;(e.target as HTMLInputElement).value = ''
 }
 
 async function handleGenerate(): Promise<void> {
+  if (!configStore.config.gpx.imported) {
+    statusMessage.value = '请先导入 GPX 轨迹文件'
+    return
+  }
   if (configStore.config.tray.recessDepthMm >= configStore.config.tray.totalThicknessMm) {
     statusMessage.value = '请修正托盘参数：下陷深度必须小于总厚度'
     return
@@ -57,22 +65,29 @@ async function handleGenerate(): Promise<void> {
         <h1 class="sidebar__title">迹印</h1>
         <p class="sidebar__subtitle">TrailPrint 3D</p>
       </div>
-      <button type="button" class="sidebar__import" @click="openGpxPicker">
+      <button
+        type="button"
+        class="sidebar__import"
+        :disabled="importing"
+        @click="openGpxPicker"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="17 8 12 3 7 8" />
           <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
-        导入 GPX
+        {{ importing ? '解析中…' : '导入 GPX' }}
       </button>
       <input
         ref="fileInput"
         type="file"
-        accept=".gpx"
+        accept=".gpx,application/gpx+xml"
         class="sr-only"
         @change="onGpxSelected"
       />
     </header>
+
+    <GpxImportSummary />
 
     <div class="sidebar__divider" role="separator" />
 
@@ -89,7 +104,7 @@ async function handleGenerate(): Promise<void> {
       <button
         type="button"
         class="sidebar__cta"
-        :disabled="generating"
+        :disabled="generating || importing"
         @click="handleGenerate"
       >
         {{ generating ? '生成中…' : '生成并下载 STL' }}
@@ -104,7 +119,7 @@ async function handleGenerate(): Promise<void> {
   flex-shrink: 0;
   align-self: stretch;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   min-height: 0;
   background: var(--tp-bg-panel);
   border-radius: var(--tp-radius-panel);
@@ -118,7 +133,7 @@ async function handleGenerate(): Promise<void> {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 20px 20px 12px;
+  padding: 20px 20px 4px;
   background: var(--tp-bg-panel);
 }
 
@@ -156,9 +171,14 @@ async function handleGenerate(): Promise<void> {
   flex-shrink: 0;
 }
 
+.sidebar__import:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
 .sidebar__divider {
   height: 1px;
-  margin: 0 20px;
+  margin: 8px 20px 0;
   background: var(--tp-border);
 }
 

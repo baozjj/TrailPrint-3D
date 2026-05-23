@@ -2,6 +2,8 @@ import { ipcMain } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import { IpcException, type IpcError } from '@shared/ipc/types'
 import type {
+  GpxParseRequest,
+  GpxParseResponse,
   PingRequest,
   PingResponse,
   TaskEnqueueRequest,
@@ -9,6 +11,7 @@ import type {
   TaskStatusRequest,
   TaskStatusResponse
 } from '@shared/ipc/types'
+import { parseGpxFile } from '../gpx/parse-gpx'
 import { enqueueTask, listTasks } from '../task-queue'
 
 function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
@@ -52,6 +55,14 @@ export function registerIpcHandlers(): void {
     IpcChannels.TASK_STATUS,
     wrapHandler((req: TaskStatusRequest = {}): TaskStatusResponse => {
       return { tasks: listTasks(req.taskId) }
+    })
+  )
+
+  ipcMain.handle(
+    IpcChannels.GPX_PARSE,
+    wrapHandler(async (req: GpxParseRequest): Promise<GpxParseResponse> => {
+      const result = await parseGpxFile(req)
+      return { result }
     })
   )
 }

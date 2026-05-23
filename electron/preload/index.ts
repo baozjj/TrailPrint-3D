@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import type {
+  GpxParseRequest,
+  GpxParseResponse,
   PingRequest,
   PingResponse,
   TaskEnqueueRequest,
@@ -28,7 +30,9 @@ const api = {
   enqueueTask: (req: TaskEnqueueRequest) =>
     invoke<TaskEnqueueResponse>(IpcChannels.TASK_ENQUEUE, req),
   getTaskStatus: (req?: TaskStatusRequest) =>
-    invoke<TaskStatusResponse>(IpcChannels.TASK_STATUS, req)
+    invoke<TaskStatusResponse>(IpcChannels.TASK_STATUS, req),
+  parseGpx: (req: GpxParseRequest) =>
+    invoke<GpxParseResponse>(IpcChannels.GPX_PARSE, req)
 }
 
 export type TrailPrintApi = typeof api

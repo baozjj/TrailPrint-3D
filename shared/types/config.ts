@@ -9,18 +9,20 @@ export type BaseShape = 'circle' | 'rectangle' | 'polygon'
 
 export interface MapCropConfig {
   shape: BaseShape
-  /** 圆形：打印半径 (mm) */
+  /** 圆形：打印半径 (mm)，仅用于 STL，不影响地图遮罩视觉大小 */
   radiusMm: number
-  /** 矩形：长 × 宽 (mm) */
+  /** 矩形：长 × 宽 (mm)；地图遮罩仅取长宽比，尺寸固定 */
   lengthMm: number
   widthMm: number
-  /** 正多边形：边数 3–8、边长 (mm) */
+  /** 正多边形：边数 3–8 影响遮罩形状；边长 (mm) 仅用于 STL */
   polygonSides: number
   polygonSideLengthMm: number
-  /** 地图视窗：中心与缩放（任务-02 完善地理坐标） */
+  /** 地图视窗中心与缩放（地理坐标，供构图与后续 DEM 采样） */
   mapCenterLat: number
   mapCenterLon: number
   mapZoom: number
+  /** 地图旋转角（度，0=北朝上），供裁剪与 STL 朝向 */
+  mapBearingDeg: number
 }
 
 // ─── 模块二：主模型生成 ─────────────────────────────────────────────
@@ -94,9 +96,16 @@ export interface GpxBounds {
 
 export interface GpxState {
   imported: boolean
+  fileName?: string
   trackName?: string
+  /** 当前生效轨迹（任务-04 优化后可能替换） */
   points: GpxPoint[]
+  /** 原始解析轨迹，供 gpxSimplify 管道使用 */
+  rawPoints: GpxPoint[]
   bounds: GpxBounds | null
+  pointCount: number
+  distanceKm: number
+  lastImportError?: string
 }
 
 // ─── 应用全局配置 ───────────────────────────────────────────────────────
@@ -115,7 +124,10 @@ export function createDefaultConfig(): AppConfig {
     gpx: {
       imported: false,
       points: [],
-      bounds: null
+      rawPoints: [],
+      bounds: null,
+      pointCount: 0,
+      distanceKm: 0
     },
     mapCrop: {
       shape: 'circle',
@@ -126,7 +138,8 @@ export function createDefaultConfig(): AppConfig {
       polygonSideLengthMm: 40,
       mapCenterLat: 0,
       mapCenterLon: 0,
-      mapZoom: 12
+      mapZoom: 12,
+      mapBearingDeg: 0
     },
     terrain: {
       baseSolidThicknessMm: 3,

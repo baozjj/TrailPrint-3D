@@ -6,10 +6,21 @@
  * - 渲染进程（Vue）：界面、地图交互、轻量 3D 预览、参数状态管理
  */
 import { app, BrowserWindow, shell } from 'electron'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc/handlers'
 
 const isDev = !app.isPackaged
+
+/** type=module 项目下 preload 构建为 ESM：index.mjs（勿用含 require 的 index.js） */
+function resolvePreloadPath(): string {
+  const dir = join(__dirname, '../preload')
+  const mjs = join(dir, 'index.mjs')
+  const cjs = join(dir, 'index.cjs')
+  if (existsSync(mjs)) return mjs
+  if (existsSync(cjs)) return cjs
+  return mjs
+}
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -21,7 +32,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     title: '迹印 TrailPrint 3D',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: resolvePreloadPath(),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false

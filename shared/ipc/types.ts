@@ -73,3 +73,5 @@ export interface TaskRecord {
 export interface TaskStatusResponse {
   tasks: TaskRecord[]
 }
+
+export type { GpxParseRequest, GpxParseResponse } from '@shared/types/gpx'
