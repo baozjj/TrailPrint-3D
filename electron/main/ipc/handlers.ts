@@ -12,7 +12,12 @@ import type {
   TaskStatusResponse
 } from '@shared/ipc/types'
 import { parseGpxFile } from '../gpx/parse-gpx'
+import { generateTerrainMain } from '../terrain/terrain-main-service'
 import { enqueueTask, listTasks } from '../task-queue'
+import type {
+  TerrainGenerateRequest,
+  TerrainGenerateResponse
+} from '@shared/types/terrain'
 
 function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
   return async (_event: Electron.IpcMainInvokeEvent, req: Req): Promise<Res> => {
@@ -46,7 +51,7 @@ export function registerIpcHandlers(): void {
       if (!req?.kind) {
         throw new IpcException('INVALID_REQUEST', '缺少任务类型 kind')
       }
-      const record = enqueueTask(req.kind)
+      const record = enqueueTask(req.kind, req.payload)
       return { taskId: record.id }
     })
   )
@@ -64,5 +69,17 @@ export function registerIpcHandlers(): void {
       const result = await parseGpxFile(req)
       return { result }
     })
+  )
+
+  ipcMain.handle(
+    IpcChannels.TERRAIN_GENERATE,
+    wrapHandler(
+      async (req: TerrainGenerateRequest): Promise<TerrainGenerateResponse> => {
+        if (!req?.config) {
+          throw new IpcException('INVALID_REQUEST', '缺少 config 快照')
+        }
+        return generateTerrainMain(req)
+      }
+    )
   )
 }

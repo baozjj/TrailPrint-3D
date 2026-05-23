@@ -42,6 +42,7 @@ export interface PingResponse {
 export type TaskKind =
   | 'gpx-parse'
   | 'dem-sample'
+  | 'terrain-generate'
   | 'mesh-boolean'
   | 'stl-export'
   | 'zip-pack'
@@ -75,3 +76,8 @@ export interface TaskStatusResponse {
 }
 
 export type { GpxParseRequest, GpxParseResponse } from '@shared/types/gpx'
+export type {
+  TerrainGenerateRequest,
+  TerrainGenerateResponse,
+  TerrainGenerateProgress
+} from '@shared/types/terrain'

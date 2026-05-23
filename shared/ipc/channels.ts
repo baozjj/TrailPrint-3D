@@ -11,7 +11,11 @@ export const IpcChannels = {
   /** 查询队列状态 */
   TASK_STATUS: 'task:status',
   /** 解析 GPX 文件（主进程） */
-  GPX_PARSE: 'gpx:parse'
+  GPX_PARSE: 'gpx:parse',
+  /** 生成 Terrain_Main 网格（主进程 DEM + 网格管线） */
+  TERRAIN_GENERATE: 'terrain:generate',
+  /** 主进程 → 渲染进程：地形生成进度 */
+  TERRAIN_PROGRESS: 'terrain:progress'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

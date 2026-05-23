@@ -34,4 +34,5 @@ src/               Vue 3 渲染进程、stores、ipc 客户端
 
 - GPX 解析：主进程 handler + `TaskKind 'gpx-parse'`
 - 配置快照：`useConfigStore().toSnapshot()` 经 IPC 传给主进程
+- Terrain_Main：`terrain:generate` IPC + `electron/main/terrain/` 网格管线；任务-04 挖槽见 `trail-groove.ts`
 - STL/ZIP：`stl-export`、`zip-pack` 任务种类已预留

@@ -1,199 +1,200 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import L from 'leaflet'
-import 'leaflet-rotate'
-import { storeToRefs } from 'pinia'
-import { useConfigStore } from '@/stores/config'
-import { useTrailPoints } from '@/composables/useTrailPoints'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import L from "leaflet";
+import "leaflet-rotate";
+import { storeToRefs } from "pinia";
+import { useConfigStore } from "@/stores/config";
+import { useTrailPoints } from "@/composables/useTrailPoints";
 import {
   buildMaskGeometry,
   maskEvenOddPath,
   maskPolygonPoints,
-  type MaskScreenGeometry
-} from '@/utils/map-mask-geometry'
+  type MaskScreenGeometry,
+} from "@/utils/map-mask-geometry";
 
-const configStore = useConfigStore()
-const { config } = storeToRefs(configStore)
-const { effectivePoints } = useTrailPoints()
+const configStore = useConfigStore();
+const { config } = storeToRefs(configStore);
+const { effectivePoints } = useTrailPoints();
 
-const mapWrap = ref<HTMLDivElement | null>(null)
-const mapRoot = ref<HTMLDivElement | null>(null)
-const maskGeom = ref<MaskScreenGeometry | null>(null)
-const maskW = ref(1)
-const maskH = ref(1)
-const mapInstance = shallowRef<L.Map | null>(null)
-const trackLayer = shallowRef<L.Polyline | null>(null)
-const tileLayer = shallowRef<L.TileLayer | null>(null)
+const mapWrap = ref<HTMLDivElement | null>(null);
+const mapRoot = ref<HTMLDivElement | null>(null);
+const maskGeom = ref<MaskScreenGeometry | null>(null);
+const maskW = ref(1);
+const maskH = ref(1);
+const mapInstance = shallowRef<L.Map | null>(null);
+const trackLayer = shallowRef<L.Polyline | null>(null);
+const tileLayer = shallowRef<L.TileLayer | null>(null);
 
 /** 滚轮每变化一级缩放所需像素；Leaflet 默认 60，越大单次缩放越平缓 */
-const WHEEL_PX_PER_ZOOM_LEVEL = 5
+const WHEEL_PX_PER_ZOOM_LEVEL = 5;
 /** 允许小数缩放，避免每次滚轮跳一整级 */
-const ZOOM_SNAP = 0.01
+const ZOOM_SNAP = 0.01;
 
 const TRACK_STYLE: L.PolylineOptions = {
-  color: '#e53935',
+  color: "#e53935",
   weight: 5,
   opacity: 0.95,
-  lineCap: 'round',
-  lineJoin: 'round'
-}
+  lineCap: "round",
+  lineJoin: "round",
+};
 
 function updateMaskLayout(): void {
-  const wrap = mapWrap.value
-  if (!wrap) return
-  const w = wrap.clientWidth
-  const h = wrap.clientHeight
-  if (w < 1 || h < 1) return
-  maskW.value = w
-  maskH.value = h
-  maskGeom.value = buildMaskGeometry(config.value.mapCrop, w, h)
+  const wrap = mapWrap.value;
+  if (!wrap) return;
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w < 1 || h < 1) return;
+  maskW.value = w;
+  maskH.value = h;
+  maskGeom.value = buildMaskGeometry(config.value.mapCrop, w, h);
 }
 
 const maskHoleStyle = computed(() => {
-  const m = maskGeom.value
-  if (!m || m.kind === 'polygon') return undefined
+  const m = maskGeom.value;
+  if (!m || m.kind === "polygon") return undefined;
   const base: Record<string, string> = {
     left: `${m.cx}px`,
     top: `${m.cy}px`,
-    transform: 'translate(-50%, -50%)'
-  }
-  if (m.kind === 'circle' && m.r) {
+    transform: "translate(-50%, -50%)",
+  };
+  if (m.kind === "circle" && m.r) {
     return {
       ...base,
       width: `${m.r * 2}px`,
       height: `${m.r * 2}px`,
-      borderRadius: '50%'
-    }
+      borderRadius: "50%",
+    };
   }
-  if (m.kind === 'rect' && m.hw && m.hh) {
+  if (m.kind === "rect" && m.hw && m.hh) {
     return {
       ...base,
       width: `${m.hw * 2}px`,
-      height: `${m.hh * 2}px`
-    }
+      height: `${m.hh * 2}px`,
+    };
   }
-  return undefined
-})
+  return undefined;
+});
 
 const polygonDimPath = computed(() => {
-  if (maskGeom.value?.kind !== 'polygon') return ''
-  return maskEvenOddPath(config.value.mapCrop, maskW.value, maskH.value)
-})
+  if (maskGeom.value?.kind !== "polygon") return "";
+  return maskEvenOddPath(config.value.mapCrop, maskW.value, maskH.value);
+});
 
 const polygonOutlinePoints = computed(() => {
-  const verts = maskGeom.value?.vertices
-  if (!verts?.length) return ''
-  return maskPolygonPoints(verts)
-})
+  const verts = maskGeom.value?.vertices;
+  if (!verts?.length) return "";
+  return maskPolygonPoints(verts);
+});
 
 function syncStoreFromMap(): void {
-  const map = mapInstance.value
-  if (!map) return
-  const c = map.getCenter()
-  config.value.mapCrop.mapCenterLat = c.lat
-  config.value.mapCrop.mapCenterLon = c.lng
-  config.value.mapCrop.mapZoom = map.getZoom()
-  if (typeof map.getBearing === 'function') {
-    config.value.mapCrop.mapBearingDeg = map.getBearing()
+  const map = mapInstance.value;
+  if (!map) return;
+  const c = map.getCenter();
+  config.value.mapCrop.mapCenterLat = c.lat;
+  config.value.mapCrop.mapCenterLon = c.lng;
+  config.value.mapCrop.mapZoom = map.getZoom();
+  if (typeof map.getBearing === "function") {
+    config.value.mapCrop.mapBearingDeg = map.getBearing();
   }
 }
 
 function updateTrackLayer(): void {
-  const map = mapInstance.value
-  if (!map) return
+  const map = mapInstance.value;
+  if (!map) return;
 
   if (trackLayer.value) {
-    map.removeLayer(trackLayer.value)
-    trackLayer.value = null
+    map.removeLayer(trackLayer.value);
+    trackLayer.value = null;
   }
 
-  const points = effectivePoints.value
-  if (!points.length) return
+  const points = effectivePoints.value;
+  if (!points.length) return;
 
-  const latlngs = points.map((p) => L.latLng(p.lat, p.lon))
-  trackLayer.value = L.polyline(latlngs, TRACK_STYLE).addTo(map)
+  const latlngs = points.map((p) => L.latLng(p.lat, p.lon));
+  trackLayer.value = L.polyline(latlngs, TRACK_STYLE).addTo(map);
 }
 
 function fitTrackInView(): void {
-  const map = mapInstance.value
-  const bounds = config.value.gpx.bounds
-  if (!map || !bounds) return
+  const map = mapInstance.value;
+  const bounds = config.value.gpx.bounds;
+  if (!map || !bounds) return;
 
   const leafletBounds = L.latLngBounds(
     [bounds.minLat, bounds.minLon],
-    [bounds.maxLat, bounds.maxLon]
-  )
+    [bounds.maxLat, bounds.maxLon],
+  );
   map.fitBounds(leafletBounds, {
     padding: [80, 80],
     maxZoom: 16,
-    animate: false
-  })
-  syncStoreFromMap()
+    animate: false,
+  });
+  syncStoreFromMap();
 }
 
 /** Alt/Option + 拖拽：绕视窗中心旋转地图（遮罩保持固定） */
 function setupAltDragRotate(map: L.Map, container: HTMLElement): () => void {
-  let rotating = false
-  let startBearing = 0
-  let startAngle = 0
-  let pivotX = 0
-  let pivotY = 0
+  let rotating = false;
+  let startBearing = 0;
+  let startAngle = 0;
+  let pivotX = 0;
+  let pivotY = 0;
 
   const angleFromPointer = (clientX: number, clientY: number) =>
-    (Math.atan2(clientY - pivotY, clientX - pivotX) * 180) / Math.PI
+    (Math.atan2(clientY - pivotY, clientX - pivotX) * 180) / Math.PI;
 
   const onPointerDown = (e: PointerEvent) => {
-    if (!e.altKey || e.button !== 0) return
-    const target = e.target as HTMLElement
-    if (target.closest('.leaflet-control')) return
+    if (!e.altKey || e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".leaflet-control")) return;
 
-    const rect = container.getBoundingClientRect()
-    pivotX = rect.left + rect.width / 2
-    pivotY = rect.top + rect.height / 2
-    startBearing = map.getBearing()
-    startAngle = angleFromPointer(e.clientX, e.clientY)
-    rotating = true
-    map.dragging.disable()
-    container.setPointerCapture(e.pointerId)
-    e.preventDefault()
-  }
+    const rect = container.getBoundingClientRect();
+    pivotX = rect.left + rect.width / 2;
+    pivotY = rect.top + rect.height / 2;
+    startBearing = map.getBearing();
+    startAngle = angleFromPointer(e.clientX, e.clientY);
+    rotating = true;
+    map.dragging.disable();
+    container.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
 
   const onPointerMove = (e: PointerEvent) => {
-    if (!rotating) return
-    const delta = angleFromPointer(e.clientX, e.clientY) - startAngle
-    map.setBearing(startBearing + delta)
-  }
+    if (!rotating) return;
+    const delta = angleFromPointer(e.clientX, e.clientY) - startAngle;
+    map.setBearing(startBearing + delta);
+  };
 
   const onPointerEnd = (e: PointerEvent) => {
-    if (!rotating) return
-    rotating = false
-    map.dragging.enable()
+    if (!rotating) return;
+    rotating = false;
+    map.dragging.enable();
     if (container.hasPointerCapture(e.pointerId)) {
-      container.releasePointerCapture(e.pointerId)
+      container.releasePointerCapture(e.pointerId);
     }
-    syncStoreFromMap()
-  }
+    syncStoreFromMap();
+  };
 
-  container.addEventListener('pointerdown', onPointerDown)
-  container.addEventListener('pointermove', onPointerMove)
-  container.addEventListener('pointerup', onPointerEnd)
-  container.addEventListener('pointercancel', onPointerEnd)
+  container.addEventListener("pointerdown", onPointerDown);
+  container.addEventListener("pointermove", onPointerMove);
+  container.addEventListener("pointerup", onPointerEnd);
+  container.addEventListener("pointercancel", onPointerEnd);
 
   return () => {
-    container.removeEventListener('pointerdown', onPointerDown)
-    container.removeEventListener('pointermove', onPointerMove)
-    container.removeEventListener('pointerup', onPointerEnd)
-    container.removeEventListener('pointercancel', onPointerEnd)
-  }
+    container.removeEventListener("pointerdown", onPointerDown);
+    container.removeEventListener("pointermove", onPointerMove);
+    container.removeEventListener("pointerup", onPointerEnd);
+    container.removeEventListener("pointercancel", onPointerEnd);
+  };
 }
 
-let teardownAltRotate: (() => void) | null = null
+let teardownAltRotate: (() => void) | null = null;
 
 function initMap(): void {
-  const el = mapRoot.value
-  if (!el || mapInstance.value) return
+  const el = mapRoot.value;
+  if (!el || mapInstance.value) return;
 
-  const { mapCenterLat, mapCenterLon, mapZoom, mapBearingDeg } = config.value.mapCrop
+  const { mapCenterLat, mapCenterLon, mapZoom, mapBearingDeg } =
+    config.value.mapCrop;
   const map = L.map(el, {
     center: [mapCenterLat || 30, mapCenterLon || 105],
     zoom: mapZoom || 10,
@@ -207,95 +208,95 @@ function initMap(): void {
     bearing: mapBearingDeg ?? 0,
     touchRotate: true,
     shiftKeyRotate: true,
-    rotateControl: false
-  })
+    rotateControl: false,
+  });
 
   tileLayer.value = L.tileLayer(
-    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
     {
       attribution:
-        'Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics',
-      maxZoom: 19
-    }
-  ).addTo(map)
+        "Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics",
+      maxZoom: 19,
+    },
+  ).addTo(map);
 
-  map.on('moveend', syncStoreFromMap)
-  map.on('zoomend', syncStoreFromMap)
-  map.on('rotate', syncStoreFromMap)
-  map.on('rotateend', syncStoreFromMap)
+  map.on("moveend", syncStoreFromMap);
+  map.on("zoomend", syncStoreFromMap);
+  map.on("rotate", syncStoreFromMap);
+  map.on("rotateend", syncStoreFromMap);
 
-  teardownAltRotate = setupAltDragRotate(map, el)
+  teardownAltRotate = setupAltDragRotate(map, el);
 
-  mapInstance.value = map
-  updateMaskLayout()
-  updateTrackLayer()
+  mapInstance.value = map;
+  updateMaskLayout();
+  updateTrackLayer();
 
   if (config.value.gpx.imported && config.value.gpx.bounds) {
-    requestAnimationFrame(() => fitTrackInView())
+    requestAnimationFrame(() => fitTrackInView());
   }
 }
 
-let resizeObserver: ResizeObserver | null = null
+let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
-  initMap()
-  const wrap = mapWrap.value
+  initMap();
+  const wrap = mapWrap.value;
   if (wrap) {
     resizeObserver = new ResizeObserver(() => {
-      updateMaskLayout()
-      mapInstance.value?.invalidateSize()
-    })
-    resizeObserver.observe(wrap)
+      updateMaskLayout();
+      mapInstance.value?.invalidateSize();
+    });
+    resizeObserver.observe(wrap);
   }
-})
+});
 
 onUnmounted(() => {
-  resizeObserver?.disconnect()
-  teardownAltRotate?.()
-  teardownAltRotate = null
-  mapInstance.value?.remove()
-  mapInstance.value = null
-  trackLayer.value = null
-  tileLayer.value = null
-})
+  resizeObserver?.disconnect();
+  teardownAltRotate?.();
+  teardownAltRotate = null;
+  mapInstance.value?.remove();
+  mapInstance.value = null;
+  trackLayer.value = null;
+  tileLayer.value = null;
+});
 
 watch(
   () => effectivePoints.value,
   () => updateTrackLayer(),
-  { deep: true }
-)
+  { deep: true },
+);
 
 watch(
   () => config.value.gpx.imported,
   (v) => {
-    if (v) requestAnimationFrame(() => fitTrackInView())
-    else updateTrackLayer()
-  }
-)
+    if (v) requestAnimationFrame(() => fitTrackInView());
+    else updateTrackLayer();
+  },
+);
 
 watch(
   () => [
     config.value.mapCrop.shape,
     config.value.mapCrop.lengthMm,
     config.value.mapCrop.widthMm,
-    config.value.mapCrop.polygonSides
+    config.value.mapCrop.polygonSides,
   ],
-  () => updateMaskLayout()
-)
+  () => updateMaskLayout(),
+);
 
 watch(
   () => config.value.mapCrop.mapBearingDeg,
   (deg) => {
-    const map = mapInstance.value
-    if (!map || typeof map.getBearing !== 'function') return
-    const current = map.getBearing()
+    const map = mapInstance.value;
+    if (!map || typeof map.getBearing !== "function") return;
+    const current = map.getBearing();
     if (Math.abs(current - deg) > 0.05) {
-      map.setBearing(deg)
+      map.setBearing(deg);
     }
-  }
-)
+  },
+);
 
-defineExpose({ fitTrackInView })
+defineExpose({ fitTrackInView });
 </script>
 
 <template>
@@ -303,11 +304,7 @@ defineExpose({ fitTrackInView })
     <div ref="mapRoot" class="leaflet-map" />
     <!-- 遮罩固定于屏幕；圆形/矩形用 CSS 避免 SVG 非等比拉伸导致虚线变形 -->
     <div v-if="maskGeom" class="map-mask">
-      <div
-        v-if="maskHoleStyle"
-        class="mask-hole"
-        :style="maskHoleStyle"
-      />
+      <div v-if="maskHoleStyle" class="mask-hole" :style="maskHoleStyle" />
       <svg
         v-else-if="polygonDimPath"
         class="map-mask__svg"

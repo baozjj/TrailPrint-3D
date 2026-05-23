@@ -1,27 +1,27 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import type { BaseShape } from '@shared/types'
-import { useConfigStore } from '@/stores/config'
-import { useUiStore } from '@/stores/ui'
-import AccordionSection from '@/components/ui/AccordionSection.vue'
-import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-import NumberField from '@/components/ui/NumberField.vue'
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import type { BaseShape } from "@shared/types";
+import { useConfigStore } from "@/stores/config";
+import { useUiStore } from "@/stores/ui";
+import AccordionSection from "@/components/ui/AccordionSection.vue";
+import SegmentedControl from "@/components/ui/SegmentedControl.vue";
+import NumberField from "@/components/ui/NumberField.vue";
 
-const configStore = useConfigStore()
-const ui = useUiStore()
-const { config } = storeToRefs(configStore)
-const { openSections } = storeToRefs(ui)
+const configStore = useConfigStore();
+const ui = useUiStore();
+const { config } = storeToRefs(configStore);
+const { openSections } = storeToRefs(ui);
 
 const shapeOptions: { value: BaseShape; label: string }[] = [
-  { value: 'circle', label: '圆形' },
-  { value: 'rectangle', label: '矩形' },
-  { value: 'polygon', label: '多边形' }
-]
+  { value: "circle", label: "圆形" },
+  { value: "rectangle", label: "矩形" },
+  { value: "polygon", label: "多边形" },
+];
 
-const isCircle = computed(() => config.value.mapCrop.shape === 'circle')
-const isRectangle = computed(() => config.value.mapCrop.shape === 'rectangle')
-const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
+const isCircle = computed(() => config.value.mapCrop.shape === "circle");
+const isRectangle = computed(() => config.value.mapCrop.shape === "rectangle");
+const isPolygon = computed(() => config.value.mapCrop.shape === "polygon");
 </script>
 
 <template>
@@ -32,10 +32,15 @@ const isPolygon = computed(() => config.value.mapCrop.shape === 'polygon')
   >
     <div class="field-group">
       <span class="field-group__label">形状</span>
-      <SegmentedControl v-model="config.mapCrop.shape" :options="shapeOptions" />
+      <SegmentedControl
+        v-model="config.mapCrop.shape"
+        :options="shapeOptions"
+      />
     </div>
 
-    <p class="field-hint">地图遮罩大小固定；下方 mm 尺寸仅用于生成 STL 模型。</p>
+    <p class="field-hint">
+      地图遮罩大小固定；下方 mm 尺寸仅用于生成 STL 模型。
+    </p>
 
     <div class="row">
       <NumberField

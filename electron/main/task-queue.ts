@@ -8,9 +8,13 @@
  * 所有耗时任务应通过 enqueue 入队，避免阻塞 Electron 事件循环与 UI。
  */
 import { randomUUID } from 'crypto'
-import type { IpcError, TaskKind, TaskRecord, TaskStatus } from '@shared/ipc/types'
+import type { IpcError, TaskEnqueueRequest, TaskKind, TaskRecord, TaskStatus } from '@shared/ipc/types'
+import type { TerrainGenerateRequest } from '@shared/types/terrain'
+import { generateTerrainMain } from './terrain/terrain-main-service'
 
-type TaskHandler = (task: TaskRecord) => Promise<void>
+type TaskHandler = (task: TaskRecord, payload?: Record<string, unknown>) => Promise<void>
+
+const terrainResults = new Map<string, unknown>()
 
 const handlers: Partial<Record<TaskKind, TaskHandler>> = {
   'gpx-parse': async () => {
@@ -18,6 +22,14 @@ const handlers: Partial<Record<TaskKind, TaskHandler>> = {
   },
   'dem-sample': async () => {
     await delay(80)
+  },
+  'terrain-generate': async (_task, payload) => {
+    const req = payload as TerrainGenerateRequest | undefined
+    if (!req?.config) {
+      throw new Error('terrain-generate 需要 payload.config')
+    }
+    const result = await generateTerrainMain(req)
+    terrainResults.set(_task.id, result)
   },
   'mesh-boolean': async () => {
     await delay(120)
@@ -31,13 +43,17 @@ const handlers: Partial<Record<TaskKind, TaskHandler>> = {
 }
 
 const tasks = new Map<string, TaskRecord>()
+const taskPayloads = new Map<string, TaskEnqueueRequest['payload']>()
 let running = false
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export function enqueueTask(kind: TaskKind): TaskRecord {
+export function enqueueTask(
+  kind: TaskKind,
+  payload?: TaskEnqueueRequest['payload']
+): TaskRecord {
   const record: TaskRecord = {
     id: randomUUID(),
     kind,
@@ -45,8 +61,13 @@ export function enqueueTask(kind: TaskKind): TaskRecord {
     createdAt: Date.now()
   }
   tasks.set(record.id, record)
+  taskPayloads.set(record.id, payload)
   void drainQueue()
   return record
+}
+
+export function getTerrainTaskResult(taskId: string): unknown {
+  return terrainResults.get(taskId)
 }
 
 export function listTasks(taskId?: string): TaskRecord[] {
@@ -75,11 +96,12 @@ async function drainQueue(): Promise<void> {
 async function runTask(task: TaskRecord): Promise<void> {
   task.status = 'running'
   const handler = handlers[task.kind]
+  const payload = taskPayloads.get(task.id)
   try {
     if (!handler) {
       throw new Error(`未注册的任务类型: ${task.kind}`)
     }
-    await handler(task)
+    await handler(task, payload)
     task.status = 'done'
     task.finishedAt = Date.now()
   } catch (err) {

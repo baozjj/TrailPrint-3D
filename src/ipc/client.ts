@@ -7,7 +7,9 @@ import type {
   TaskEnqueueRequest,
   TaskEnqueueResponse,
   TaskStatusRequest,
-  TaskStatusResponse
+  TaskStatusResponse,
+  TerrainGenerateRequest,
+  TerrainGenerateResponse
 } from '@shared/ipc/types'
 
 function getApi(): Window['trailPrint'] {
@@ -35,6 +37,12 @@ export async function ipcGetTaskStatus(
 
 export async function ipcParseGpx(req: GpxParseRequest): Promise<GpxParseResponse> {
   return getApi().parseGpx(req)
+}
+
+export async function ipcGenerateTerrain(
+  req: TerrainGenerateRequest
+): Promise<TerrainGenerateResponse> {
+  return getApi().generateTerrain(req)
 }
 
 export function formatIpcError(err: unknown): string {
