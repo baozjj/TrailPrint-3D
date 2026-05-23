@@ -15,7 +15,9 @@ export const IpcChannels = {
   /** 生成 Terrain_Main 网格（主进程 DEM + 网格管线） */
   TERRAIN_GENERATE: 'terrain:generate',
   /** 主进程 → 渲染进程：地形生成进度 */
-  TERRAIN_PROGRESS: 'terrain:progress'
+  TERRAIN_PROGRESS: 'terrain:progress',
+  /** 生成 Tray_Base 托盘网格（主进程） */
+  TRAY_GENERATE: 'tray:generate'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

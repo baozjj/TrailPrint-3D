@@ -80,5 +80,6 @@ const emit = defineEmits<{ toggle: [] }>()
   flex-direction: column;
   gap: 14px;
   padding: 0 16px 16px;
+  min-width: 0;
 }
 </style>

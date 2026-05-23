@@ -18,6 +18,11 @@ import type {
   TerrainGenerateRequest,
   TerrainGenerateResponse
 } from '@shared/types/terrain'
+import type {
+  TrayGenerateRequest,
+  TrayGenerateResponse
+} from '@shared/types/tray'
+import { generateTrayBase } from '../tray/tray-service'
 
 function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
   return async (_event: Electron.IpcMainInvokeEvent, req: Req): Promise<Res> => {
@@ -79,6 +84,18 @@ export function registerIpcHandlers(): void {
           throw new IpcException('INVALID_REQUEST', '缺少 config 快照')
         }
         return generateTerrainMain(req)
+      }
+    )
+  )
+
+  ipcMain.handle(
+    IpcChannels.TRAY_GENERATE,
+    wrapHandler(
+      async (req: TrayGenerateRequest): Promise<TrayGenerateResponse> => {
+        if (!req?.config) {
+          throw new IpcException('INVALID_REQUEST', '缺少 config 快照')
+        }
+        return generateTrayBase(req)
       }
     )
   )

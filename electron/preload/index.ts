@@ -10,7 +10,9 @@ import type {
   TaskStatusRequest,
   TaskStatusResponse,
   TerrainGenerateRequest,
-  TerrainGenerateResponse
+  TerrainGenerateResponse,
+  TrayGenerateRequest,
+  TrayGenerateResponse
 } from '@shared/ipc/types'
 import { isIpcError } from '@shared/ipc/types'
 
@@ -36,7 +38,9 @@ const api = {
   parseGpx: (req: GpxParseRequest) =>
     invoke<GpxParseResponse>(IpcChannels.GPX_PARSE, req),
   generateTerrain: (req: TerrainGenerateRequest) =>
-    invoke<TerrainGenerateResponse>(IpcChannels.TERRAIN_GENERATE, req)
+    invoke<TerrainGenerateResponse>(IpcChannels.TERRAIN_GENERATE, req),
+  generateTray: (req: TrayGenerateRequest) =>
+    invoke<TrayGenerateResponse>(IpcChannels.TRAY_GENERATE, req)
 }
 
 export type TrailPrintApi = typeof api

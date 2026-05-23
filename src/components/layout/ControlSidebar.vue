@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/ui'
 import { useConfigStore } from '@/stores/config'
 import { useGpxImport } from '@/composables/useGpxImport'
 import { formatIpcError, ipcEnqueueTask } from '@/ipc/client'
+import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
@@ -38,8 +39,9 @@ async function handleGenerate(): Promise<void> {
     statusMessage.value = '请先导入 GPX 轨迹文件'
     return
   }
-  if (configStore.config.tray.recessDepthMm >= configStore.config.tray.totalThicknessMm) {
-    statusMessage.value = '请修正托盘参数：下陷深度必须小于总厚度'
+  const trayCheck = validateTrayFromAppConfig(configStore.config)
+  if (!trayCheck.valid) {
+    statusMessage.value = trayCheck.message ?? '请修正托盘参数'
     return
   }
   generating.value = true

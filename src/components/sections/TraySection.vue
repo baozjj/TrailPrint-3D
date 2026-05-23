@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { EngraveStyle } from '@shared/types'
+import type { BorderTextEdge, EngraveStyle, TextFacing } from '@shared/types'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
 import { useBorderText } from '@/composables/useBorderText'
+import { TRAY_FONT_CATALOG } from '@shared/tray/font-catalog'
+import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import AccordionSection from '@/components/ui/AccordionSection.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import IosToggle from '@/components/ui/IosToggle.vue'
@@ -21,15 +23,23 @@ const engraveOptions: { value: EngraveStyle; label: string }[] = [
   { value: 'relief', label: '阳刻(凸)' }
 ]
 
+const fontOptions = TRAY_FONT_CATALOG.map((f) => ({
+  value: f.id,
+  label: f.label
+}))
+
 const trayError = computed(() => {
-  if (config.value.tray.recessDepthMm >= config.value.tray.totalThicknessMm) {
-    return '下陷深度必须小于总厚度'
-  }
-  return null
+  const v = validateTrayFromAppConfig(config.value)
+  return v.valid ? null : v.message
 })
 
-function edgeContent(index: number): string {
-  return config.value.tray.borderTextByEdge[index]?.content ?? ''
+function edgeAt(index: number): BorderTextEdge | undefined {
+  return config.value.tray.borderTextByEdge[index]
+}
+
+function patchEdge(index: number, patch: Partial<BorderTextEdge>): void {
+  const edge = edgeAt(index)
+  if (edge) Object.assign(edge, patch)
 }
 </script>
 
@@ -72,27 +82,121 @@ function edgeContent(index: number): string {
       </div>
 
       <template v-if="borderTextEnabled">
-        <div class="edge-grid">
-          <label v-for="(label, index) in edgeLabels" :key="label" class="text-edge">
-            <span class="text-edge__label">{{ label }}</span>
-            <input
-              type="text"
-              class="text-edge__input"
-              :value="edgeContent(index)"
-              placeholder="纪念文字"
-              @input="
-                (e) => {
-                  const edge = config.tray.borderTextByEdge[index]
-                  if (edge) edge.content = (e.target as HTMLInputElement).value
-                }
-              "
-            />
-          </label>
+        <div class="engrave-block">
+          <div class="edge-list">
+            <div
+              v-for="(label, index) in edgeLabels"
+              :key="label"
+              class="edge-card"
+            >
+              <div class="edge-card__head">
+                <span class="edge-card__title">{{ label }}</span>
+                <div class="edge-card__controls">
+                  <select
+                    class="ctrl ctrl--font"
+                    :value="edgeAt(index)?.fontId ?? 'inter'"
+                    title="字体"
+                    @change="
+                      patchEdge(index, {
+                        fontId: ($event.target as HTMLSelectElement).value,
+                      })
+                    "
+                  >
+                    <option
+                      v-for="opt in fontOptions"
+                      :key="opt.value"
+                      :value="opt.value"
+                    >
+                      {{ opt.label }}
+                    </option>
+                  </select>
+                  <label class="ctrl ctrl--size" title="字号 (mm)">
+                    <span class="ctrl__mini">字号</span>
+                    <input
+                      type="number"
+                      class="ctrl__num"
+                      :value="edgeAt(index)?.fontSizeMm ?? 2.2"
+                      min="1"
+                      max="8"
+                      step="0.1"
+                      @input="
+                        patchEdge(index, {
+                          fontSizeMm: Number(
+                            ($event.target as HTMLInputElement).value,
+                          ),
+                        })
+                      "
+                    />
+                  </label>
+                  <div
+                    class="facing-toggle"
+                    role="group"
+                    :aria-label="`${label}文字方向`"
+                  >
+                    <button
+                      type="button"
+                      class="facing-toggle__btn"
+                      :class="{
+                        'facing-toggle__btn--active':
+                          edgeAt(index)?.facing === 'inward',
+                      }"
+                      title="朝内"
+                      @click="patchEdge(index, { facing: 'inward' })"
+                    >
+                      内
+                    </button>
+                    <button
+                      type="button"
+                      class="facing-toggle__btn"
+                      :class="{
+                        'facing-toggle__btn--active':
+                          (edgeAt(index)?.facing ?? 'outward') === 'outward',
+                      }"
+                      title="朝外"
+                      @click="patchEdge(index, { facing: 'outward' })"
+                    >
+                      外
+                    </button>
+                  </div>
+                  <label class="ctrl ctrl--offset" title="垂直于边、相对边框带中线的偏移 (mm)">
+                    <span class="ctrl__mini">垂直</span>
+                    <input
+                      type="number"
+                      class="ctrl__num ctrl__num--wide"
+                      :value="edgeAt(index)?.centerOffsetMm ?? 0"
+                      step="0.5"
+                      @input="
+                        patchEdge(index, {
+                          centerOffsetMm: Number(
+                            ($event.target as HTMLInputElement).value,
+                          ),
+                        })
+                      "
+                    />
+                  </label>
+                </div>
+              </div>
+              <input
+                type="text"
+                class="edge-card__input"
+                :value="edgeAt(index)?.content ?? ''"
+                placeholder="纪念文字（边框带内垂直居中）"
+                @input="
+                  patchEdge(index, {
+                    content: ($event.target as HTMLInputElement).value,
+                  })
+                "
+              />
+            </div>
+          </div>
+          <SegmentedControl
+            v-model="globalEngraveStyle"
+            :options="engraveOptions"
+          />
         </div>
-        <SegmentedControl v-model="globalEngraveStyle" :options="engraveOptions" />
       </template>
 
-      <p class="hint">仅支持矩形与多边形</p>
+      <p class="hint">仅支持矩形与多边形 · 垂直偏移相对黄框边带中线，正=朝外</p>
     </template>
   </AccordionSection>
 </template>
@@ -105,36 +209,132 @@ function edgeContent(index: number): string {
   font-size: 14px;
 }
 
-.edge-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.text-edge {
+.engrave-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
 }
 
-.text-edge__label {
+.edge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.edge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--tp-radius-control);
+  background: var(--tp-bg-input);
+  min-width: 0;
+}
+
+.edge-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.edge-card__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-text-primary);
+  flex-shrink: 0;
+}
+
+.edge-card__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ctrl--font {
+  height: 32px;
+  min-width: 0;
+  max-width: 96px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: var(--tp-bg-panel);
   font-size: 12px;
+}
+
+.ctrl__mini {
+  font-size: 10px;
+  color: var(--tp-text-secondary);
+  white-space: nowrap;
+}
+
+.ctrl__num {
+  width: 40px;
+  height: 28px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 6px;
+  background: var(--tp-bg-panel);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.ctrl__num--wide {
+  width: 48px;
+}
+
+.facing-toggle {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--tp-bg-segment);
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.facing-toggle__btn {
+  width: 26px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
   color: var(--tp-text-secondary);
 }
 
-.text-edge__input {
+.facing-toggle__btn--active {
+  background: #fff;
+  color: var(--tp-text-primary);
+  box-shadow: var(--tp-shadow-segment);
+}
+
+.edge-card__input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   height: 40px;
   padding: 0 12px;
   border: none;
-  border-radius: var(--tp-radius-control);
-  background: var(--tp-bg-input);
+  border-radius: 8px;
+  background: var(--tp-bg-panel);
   font-size: 15px;
   font-weight: 500;
   color: var(--tp-text-primary);
   outline: none;
 }
 
-.text-edge__input:focus {
+.edge-card__input:focus {
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.25);
 }
 
@@ -148,5 +348,10 @@ function edgeContent(index: number): string {
   margin: 0;
   font-size: 12px;
   color: #ff3b30;
+}
+
+.engrave-block :deep(.segmented) {
+  width: 100%;
+  min-width: 0;
 }
 </style>

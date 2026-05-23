@@ -81,3 +81,7 @@ export type {
   TerrainGenerateResponse,
   TerrainGenerateProgress
 } from '@shared/types/terrain'
+export type {
+  TrayGenerateRequest,
+  TrayGenerateResponse
+} from '@shared/types/tray'

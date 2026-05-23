@@ -11,9 +11,16 @@ import {
   maskPolygonPoints,
   type MaskScreenGeometry,
 } from "@/utils/map-mask-geometry";
+import {
+  buildTrayMaskOverlay,
+  trayOuterPolygonPoints,
+} from "@/utils/tray-mask-geometry";
+import { useUiStore } from "@/stores/ui";
 
 const configStore = useConfigStore();
+const ui = useUiStore();
 const { config } = storeToRefs(configStore);
+const { borderTextEnabled } = storeToRefs(ui);
 const { effectivePoints } = useTrailPoints();
 
 const mapWrap = ref<HTMLDivElement | null>(null);
@@ -85,6 +92,52 @@ const polygonOutlinePoints = computed(() => {
   if (!verts?.length) return "";
   return maskPolygonPoints(verts);
 });
+
+const trayOverlay = computed(() => {
+  if (maskW.value < 1 || maskH.value < 1) return null;
+  return buildTrayMaskOverlay(
+    config.value.mapCrop,
+    config.value.tray,
+    maskW.value,
+    maskH.value,
+    borderTextEnabled.value,
+  );
+});
+
+const trayOuterStyle = computed(() => {
+  const t = trayOverlay.value;
+  const m = t?.outer;
+  if (!m || m.kind === "polygon") return undefined;
+  const base: Record<string, string> = {
+    left: `${m.cx}px`,
+    top: `${m.cy}px`,
+    transform: "translate(-50%, -50%)",
+  };
+  if (m.kind === "circle" && m.r) {
+    return {
+      ...base,
+      width: `${m.r * 2}px`,
+      height: `${m.r * 2}px`,
+      borderRadius: "50%",
+    };
+  }
+  if (m.kind === "rect" && m.hw && m.hh) {
+    return {
+      ...base,
+      width: `${m.hw * 2}px`,
+      height: `${m.hh * 2}px`,
+    };
+  }
+  return undefined;
+});
+
+const trayPolygonOutline = computed(() => {
+  const t = trayOverlay.value;
+  if (!t || t.outer.kind !== "polygon") return "";
+  return trayOuterPolygonPoints(t);
+});
+
+const rimTextItems = computed(() => trayOverlay.value?.rimTexts ?? []);
 
 function syncStoreFromMap(): void {
   const map = mapInstance.value;
@@ -280,6 +333,9 @@ watch(
     config.value.mapCrop.lengthMm,
     config.value.mapCrop.widthMm,
     config.value.mapCrop.polygonSides,
+    config.value.tray.rimWidthMm,
+    config.value.tray.borderTextByEdge,
+    borderTextEnabled.value,
   ],
   () => updateMaskLayout(),
 );
@@ -305,6 +361,11 @@ defineExpose({ fitTrackInView });
     <!-- 遮罩固定于屏幕；圆形/矩形用 CSS 避免 SVG 非等比拉伸导致虚线变形 -->
     <div v-if="maskGeom" class="map-mask">
       <div v-if="maskHoleStyle" class="mask-hole" :style="maskHoleStyle" />
+      <div
+        v-if="trayOuterStyle"
+        class="mask-tray-outline"
+        :style="trayOuterStyle"
+      />
       <svg
         v-else-if="polygonDimPath"
         class="map-mask__svg"
@@ -319,7 +380,30 @@ defineExpose({ fitTrackInView });
           stroke-width="2.5"
           stroke-dasharray="10 6"
         />
+        <polygon
+          v-if="trayPolygonOutline"
+          :points="trayPolygonOutline"
+          fill="none"
+          class="mask-tray-stroke"
+          stroke-width="2.5"
+          stroke-dasharray="8 5"
+        />
       </svg>
+      <span
+        v-for="(item, idx) in rimTextItems"
+        :key="idx"
+        class="rim-text"
+        :style="{
+          left: `${item.x}px`,
+          top: `${item.y}px`,
+          transform: item.transform,
+          fontSize: `${item.fontSizePx}px`,
+        }"
+      >{{ item.text }}</span>
+      <div class="mask-legend">
+        <span class="mask-legend__item mask-legend__item--terrain">白框 · 山体范围</span>
+        <span class="mask-legend__item mask-legend__item--tray">黄框 · 托盘外缘</span>
+      </div>
     </div>
   </div>
 </template>
@@ -354,6 +438,77 @@ defineExpose({ fitTrackInView });
   box-sizing: border-box;
   border: 2.5px dashed rgba(255, 255, 255, 0.95);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.45);
+  z-index: 2;
+}
+
+.mask-tray-outline {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2.5px dashed rgba(255, 193, 7, 0.95);
+  pointer-events: none;
+  z-index: 1;
+}
+
+:deep(.mask-tray-stroke) {
+  stroke: rgba(255, 193, 7, 0.95);
+}
+
+.rim-text {
+  position: absolute;
+  z-index: 3;
+  max-width: 42%;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.mask-legend {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+}
+
+.mask-legend__item {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.mask-legend__item--terrain::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 0;
+  margin-right: 6px;
+  border-top: 2px dashed rgba(255, 255, 255, 0.95);
+  vertical-align: middle;
+}
+
+.mask-legend__item--tray::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 0;
+  margin-right: 6px;
+  border-top: 2px dashed rgba(255, 193, 7, 0.95);
+  vertical-align: middle;
 }
 
 .map-mask__svg {

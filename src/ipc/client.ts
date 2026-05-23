@@ -9,7 +9,9 @@ import type {
   TaskStatusRequest,
   TaskStatusResponse,
   TerrainGenerateRequest,
-  TerrainGenerateResponse
+  TerrainGenerateResponse,
+  TrayGenerateRequest,
+  TrayGenerateResponse
 } from '@shared/ipc/types'
 
 function getApi(): Window['trailPrint'] {
@@ -43,6 +45,12 @@ export async function ipcGenerateTerrain(
   req: TerrainGenerateRequest
 ): Promise<TerrainGenerateResponse> {
   return getApi().generateTerrain(req)
+}
+
+export async function ipcGenerateTray(
+  req: TrayGenerateRequest
+): Promise<TrayGenerateResponse> {
+  return getApi().generateTray(req)
 }
 
 export function formatIpcError(err: unknown): string {

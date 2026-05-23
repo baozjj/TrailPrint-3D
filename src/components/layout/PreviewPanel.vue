@@ -5,6 +5,7 @@ import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
 import { useGpxImport } from "@/composables/useGpxImport";
 import { useTerrainGeneration } from "@/composables/useTerrainGeneration";
+import { useTrayGeneration } from "@/composables/useTrayGeneration";
 import type { PreviewMode } from "@/stores/ui";
 import SegmentedControl from "@/components/ui/SegmentedControl.vue";
 import MapLeafletView from "@/components/map/MapLeafletView.vue";
@@ -21,8 +22,17 @@ const mapRef = ref<InstanceType<typeof MapLeafletView> | null>(null);
 const surfaceRef = ref<HTMLElement | null>(null);
 const viewport = ref({ w: 800, h: 600 });
 
-const { generating, error, mesh, trailMesh, lastResult } =
-  useTerrainGeneration(viewport);
+const terrainGen = useTerrainGeneration(viewport);
+const trayGen = useTrayGeneration();
+
+const generating = computed(
+  () => terrainGen.generating.value || trayGen.generating.value,
+);
+const previewError = computed(
+  () => terrainGen.error.value || trayGen.error.value,
+);
+const { mesh, trailMesh, lastResult } = terrainGen;
+const { mesh: trayMesh } = trayGen;
 
 const demLabel = computed(() => {
   if (!lastResult.value) return "";
@@ -96,15 +106,20 @@ async function onDrop(e: DragEvent): Promise<void> {
         v-if="previewMode === '3d'"
         :mesh="mesh"
         :trail-mesh="trailMesh"
+        :tray-mesh="trayMesh"
         :generating="generating"
-        :error="error"
-        :dem-label="mesh ? demLabel : undefined"
+        :error="previewError"
+        :dem-label="mesh || trayMesh ? demLabel : undefined"
       />
 
       <div
         v-if="
           (show2dMap && !config.gpx.imported) ||
-          (previewMode === '3d' && !mesh && !generating && !error)
+          (previewMode === '3d' &&
+            !mesh &&
+            !trayMesh &&
+            !generating &&
+            !previewError)
         "
         class="preview__placeholder"
       >
@@ -142,13 +157,10 @@ async function onDrop(e: DragEvent): Promise<void> {
         </p>
       </div>
 
-      <div
-        v-if="show2dMap && config.gpx.imported"
-        class="preview__hint-bar"
-      >
+      <div v-if="show2dMap && config.gpx.imported" class="preview__hint-bar">
         <span
-          >拖动平移 · 滚轮缩放 · Option/Alt+拖动或 Shift+滚轮旋转 ·
-          白框为固定构图范围</span
+          >拖动平移 · 滚轮缩放 · 白框=山体 · 黄框=托盘外缘 ·
+          刻字显示在黄框边带上 · 3D 视图可看立体效果</span
         >
       </div>
 

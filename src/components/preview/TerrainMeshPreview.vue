@@ -5,6 +5,7 @@ import type { TerrainMeshPayload } from "@shared/types/terrain";
 const props = defineProps<{
   mesh: TerrainMeshPayload | null;
   trailMesh?: TerrainMeshPayload | null;
+  trayMesh?: TerrainMeshPayload | null;
   generating?: boolean;
   error?: string | null;
   demLabel?: string;
@@ -17,10 +18,14 @@ let terrainPosBuf: WebGLBuffer | null = null;
 let terrainIdxBuf: WebGLBuffer | null = null;
 let trailPosBuf: WebGLBuffer | null = null;
 let trailIdxBuf: WebGLBuffer | null = null;
+let trayPosBuf: WebGLBuffer | null = null;
+let trayIdxBuf: WebGLBuffer | null = null;
 let terrainIndexCount = 0;
 let trailIndexCount = 0;
+let trayIndexCount = 0;
 let terrainUint32 = false;
 let trailUint32 = false;
+let trayUint32 = false;
 let raf = 0;
 let angle = 0.6;
 
@@ -40,10 +45,14 @@ function initGl(canvas: HTMLCanvasElement): boolean {
   `;
   const fs = `
     precision mediump float;
-    uniform float uTrail;
+    uniform float uMeshKind;
     varying float vHeight;
     void main() {
-      if (uTrail > 0.5) {
+      if (uMeshKind > 1.5) {
+        gl_FragColor = vec4(0.45, 0.48, 0.55, 1.0);
+        return;
+      }
+      if (uMeshKind > 0.5) {
         gl_FragColor = vec4(0.91, 0.26, 0.21, 1.0);
         return;
       }
@@ -72,6 +81,8 @@ function initGl(canvas: HTMLCanvasElement): boolean {
   terrainIdxBuf = gl.createBuffer();
   trailPosBuf = gl.createBuffer();
   trailIdxBuf = gl.createBuffer();
+  trayPosBuf = gl.createBuffer();
+  trayIdxBuf = gl.createBuffer();
   return true;
 }
 
@@ -186,12 +197,24 @@ function syncMeshes(): void {
   } else {
     trailIndexCount = 0;
   }
+
+  if (props.trayMesh) {
+    const t = bindMesh(props.trayMesh, trayPosBuf!, trayIdxBuf!);
+    trayIndexCount = t.count;
+    trayUint32 = t.uint32;
+  } else {
+    trayIndexCount = 0;
+  }
 }
 
 function draw(): void {
   const canvas = canvasRef.value;
   if (!gl || !program || !canvas) return;
-  if (terrainIndexCount === 0 && trailIndexCount === 0) {
+  if (
+    terrainIndexCount === 0 &&
+    trailIndexCount === 0 &&
+    trayIndexCount === 0
+  ) {
     raf = requestAnimationFrame(draw);
     return;
   }
@@ -219,24 +242,28 @@ function draw(): void {
     rotateX(0.55),
     multiply(
       rotateY(angle),
-      new Float32Array([
-        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -15, -120, 1,
-      ]),
+      new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -15, -120, 1]),
     ),
   );
   const mvp = multiply(proj, view);
   gl.uniformMatrix4fv(gl.getUniformLocation(program, "uMatrix"), false, mvp);
 
-  const uTrail = gl.getUniformLocation(program, "uTrail");
+  const uKind = gl.getUniformLocation(program, "uMeshKind");
 
-  if (terrainIndexCount > 0 && terrainPosBuf && terrainIdxBuf) {
-    gl.uniform1f(uTrail, 0);
-    bindMesh(props.mesh!, terrainPosBuf, terrainIdxBuf);
+  if (trayIndexCount > 0 && trayPosBuf && trayIdxBuf && props.trayMesh) {
+    gl.uniform1f(uKind, 2);
+    bindMesh(props.trayMesh, trayPosBuf, trayIdxBuf);
+    drawElements(trayIndexCount, trayUint32);
+  }
+
+  if (terrainIndexCount > 0 && terrainPosBuf && terrainIdxBuf && props.mesh) {
+    gl.uniform1f(uKind, 0);
+    bindMesh(props.mesh, terrainPosBuf, terrainIdxBuf);
     drawElements(terrainIndexCount, terrainUint32);
   }
 
   if (trailIndexCount > 0 && trailPosBuf && trailIdxBuf && props.trailMesh) {
-    gl.uniform1f(uTrail, 1);
+    gl.uniform1f(uKind, 1);
     bindMesh(props.trailMesh, trailPosBuf, trailIdxBuf);
     drawElements(trailIndexCount, trailUint32);
   }
@@ -254,7 +281,7 @@ function resize(): void {
 }
 
 watch(
-  () => [props.mesh, props.trailMesh],
+  () => [props.mesh, props.trailMesh, props.trayMesh],
   () => {
     syncMeshes();
     if (!raf) raf = requestAnimationFrame(draw);
@@ -284,7 +311,9 @@ onUnmounted(() => {
 <template>
   <div class="terrain-preview">
     <canvas ref="canvasRef" class="terrain-preview__canvas" />
-    <div v-if="generating" class="terrain-preview__badge">正在生成地形与轨迹…</div>
+    <div v-if="generating" class="terrain-preview__badge">
+      正在生成 3D 模型…
+    </div>
     <div
       v-else-if="error"
       class="terrain-preview__badge terrain-preview__badge--err"
@@ -296,7 +325,8 @@ onUnmounted(() => {
       class="terrain-preview__badge terrain-preview__badge--dim"
     >
       {{ demLabel }}
-      <span v-if="trailMesh"> · 红=轨迹件</span>
+      <span v-if="trailMesh"> · 红=轨迹</span>
+      <span v-if="trayMesh"> · 灰=托盘</span>
     </div>
   </div>
 </template>
