@@ -1,9 +1,10 @@
 import { computed } from 'vue'
 import type { GpxPoint } from '@shared/types'
+import { simplifyGpxTrack } from '@shared/utils/gpx-simplify'
 import { useConfigStore } from '@/stores/config'
 
 /**
- * 轨迹点读取管道：默认返回解析结果；任务-04 将在 gpxSimplify 开启时替换为优化轨迹。
+ * 轨迹点管道（任务-04）：gpxSimplify 开启时返回降噪/简化后的点列。
  */
 export function useTrailPoints() {
   const configStore = useConfigStore()
@@ -11,11 +12,11 @@ export function useTrailPoints() {
   const effectivePoints = computed((): GpxPoint[] => {
     const { gpx, trail } = configStore.config
     if (!gpx.imported || gpx.points.length === 0) return []
+    const raw = gpx.rawPoints.length > 0 ? gpx.rawPoints : gpx.points
     if (trail.gpxSimplify) {
-      // TODO 任务-04：对 rawPoints 做降噪/平滑后返回
-      return gpx.rawPoints.length > 0 ? gpx.rawPoints : gpx.points
+      return simplifyGpxTrack(raw)
     }
-    return gpx.points
+    return gpx.points.length > 0 ? gpx.points : raw
   })
 
   return { effectivePoints }

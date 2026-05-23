@@ -9,7 +9,12 @@ import { IpcException } from "@shared/ipc/types";
 import { sampleDemGrid } from "./dem-provider";
 import { applyTerrainSmoothing } from "./smoothing";
 import { buildTerrainMainMesh } from "./mesh-builder";
-import { applyTrailGrooveCut } from "./trail-groove";
+import { applyGrooveToHeightField } from "./trail-groove";
+import { buildTrailLineMesh } from "./trail-line-mesh";
+import {
+  buildTrailGrooveSpec,
+  buildTrailLinePolyline,
+} from "./trail-pipeline";
 
 const GRID_MAX = 72;
 const GRID_MIN = 24;
@@ -57,7 +62,7 @@ export async function generateTerrainMain(
   req: TerrainGenerateRequest,
 ): Promise<TerrainGenerateResponse> {
   const started = Date.now();
-  const { config, viewportWidth, viewportHeight, trailGroove } = req;
+  const { config, viewportWidth, viewportHeight } = req;
 
   if (viewportWidth < 8 || viewportHeight < 8) {
     throw new IpcException(
@@ -87,7 +92,13 @@ export async function generateTerrainMain(
     config.terrain.zExaggeration,
   );
 
-  let mesh: TerrainMeshPayload = buildTerrainMainMesh({
+  const surfaceForTrail = new Float64Array(heightMm);
+  const groove =
+    req.trailGroove ?? buildTrailGrooveSpec(config, crop);
+
+  applyGrooveToHeightField(heightMm, cols, rows, crop, groove);
+
+  const mesh: TerrainMeshPayload = buildTerrainMainMesh({
     crop,
     heightMm,
     cols,
@@ -95,11 +106,24 @@ export async function generateTerrainMain(
     baseThicknessMm: config.terrain.baseSolidThicknessMm,
   });
 
-  mesh = applyTrailGrooveCut(mesh, trailGroove);
+  const polylineMm = buildTrailLinePolyline(config, crop);
+  let trailMesh: TerrainMeshPayload | null = null;
+  if (polylineMm.length >= 2) {
+    trailMesh = buildTrailLineMesh({
+      polylineMm,
+      widthMm: config.trail.trailWidthMm,
+      depthMm: config.trail.trailDepthMm,
+      heightMm: surfaceForTrail,
+      cols,
+      rows,
+      crop,
+    });
+  }
 
   return {
     crop,
     mesh,
+    trailMesh,
     demSource: dem.source,
     generationMs: Date.now() - started,
   };

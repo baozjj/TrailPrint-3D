@@ -35,9 +35,11 @@ export interface TerrainMeshPayload {
 
 /** 任务-04：轨迹槽挖除规格（主模型表面布尔减） */
 export interface TrailGrooveSpec {
-  /** 轨迹折线，模型平面坐标 mm */
+  /** 轨迹折线，模型平面坐标 mm（与 Terrain_Main 同一坐标系） */
   polylineMm: Array<{ x: number; y: number }>;
+  /** 凹槽宽度 (mm)，含任务-06 装配公差：trailWidth + 2×trailTolerance */
   widthMm: number;
+  /** 凹槽深度 (mm)，等于轨迹厚度 trailDepthMm */
   depthMm: number;
 }
 
@@ -53,6 +55,8 @@ export interface TerrainGenerateRequest {
 export interface TerrainGenerateResponse {
   crop: TerrainCropRegion;
   mesh: TerrainMeshPayload;
+  /** Trail_Line 可打印实体；无 GPX 或点数不足时为 null */
+  trailMesh: TerrainMeshPayload | null;
   /** DEM 来源说明 */
   demSource: "open-meteo" | "synthetic";
   generationMs: number;

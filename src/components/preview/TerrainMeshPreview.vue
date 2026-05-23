@@ -4,6 +4,7 @@ import type { TerrainMeshPayload } from "@shared/types/terrain";
 
 const props = defineProps<{
   mesh: TerrainMeshPayload | null;
+  trailMesh?: TerrainMeshPayload | null;
   generating?: boolean;
   error?: string | null;
   demLabel?: string;
@@ -12,10 +13,14 @@ const props = defineProps<{
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let gl: WebGLRenderingContext | null = null;
 let program: WebGLProgram | null = null;
-let positionBuffer: WebGLBuffer | null = null;
-let indexBuffer: WebGLBuffer | null = null;
-let indexCount = 0;
-let useUint32 = false;
+let terrainPosBuf: WebGLBuffer | null = null;
+let terrainIdxBuf: WebGLBuffer | null = null;
+let trailPosBuf: WebGLBuffer | null = null;
+let trailIdxBuf: WebGLBuffer | null = null;
+let terrainIndexCount = 0;
+let trailIndexCount = 0;
+let terrainUint32 = false;
+let trailUint32 = false;
 let raf = 0;
 let angle = 0.6;
 
@@ -35,13 +40,17 @@ function initGl(canvas: HTMLCanvasElement): boolean {
   `;
   const fs = `
     precision mediump float;
+    uniform float uTrail;
     varying float vHeight;
     void main() {
+      if (uTrail > 0.5) {
+        gl_FragColor = vec4(0.91, 0.26, 0.21, 1.0);
+        return;
+      }
       float t = clamp((vHeight + 8.0) / 40.0, 0.0, 1.0);
       vec3 low = vec3(0.25, 0.45, 0.28);
       vec3 high = vec3(0.85, 0.78, 0.55);
-      vec3 col = mix(low, high, t);
-      gl_FragColor = vec4(col, 1.0);
+      gl_FragColor = vec4(mix(low, high, t), 1.0);
     }
   `;
 
@@ -58,10 +67,11 @@ function initGl(canvas: HTMLCanvasElement): boolean {
   gl.attachShader(program, vsh);
   gl.attachShader(program, fsh);
   gl.linkProgram(program);
-  gl.useProgram(program);
 
-  positionBuffer = gl.createBuffer();
-  indexBuffer = gl.createBuffer();
+  terrainPosBuf = gl.createBuffer();
+  terrainIdxBuf = gl.createBuffer();
+  trailPosBuf = gl.createBuffer();
+  trailIdxBuf = gl.createBuffer();
   return true;
 }
 
@@ -122,36 +132,77 @@ function rotateX(a: number): Float32Array {
   return out;
 }
 
-function uploadMesh(mesh: TerrainMeshPayload): void {
-  if (!gl || !program || !positionBuffer || !indexBuffer) return;
+function bindMesh(
+  mesh: TerrainMeshPayload,
+  posBuf: WebGLBuffer,
+  idxBuf: WebGLBuffer,
+): { count: number; uint32: boolean } {
+  if (!gl || !program) return { count: 0, uint32: false };
 
   const pos = new Float32Array(mesh.positions);
   const maxIndex = mesh.indices.reduce((m, v) => Math.max(m, v), 0);
-  useUint32 = maxIndex > 65535;
-  const idx = useUint32
+  const uint32 = maxIndex > 65535;
+  const idx = uint32
     ? new Uint32Array(mesh.indices)
     : new Uint16Array(mesh.indices);
 
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
   gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
-
   const loc = gl.getAttribLocation(program, "aPosition");
   gl.enableVertexAttribArray(loc);
   gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
 
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-  indexCount = idx.length;
+  return { count: idx.length, uint32 };
+}
+
+function drawElements(count: number, uint32: boolean): void {
+  if (!gl || count === 0) return;
+  if (uint32) {
+    const ext = gl.getExtension("OES_element_index_uint");
+    if (ext) gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, 0);
+  } else {
+    gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
+  }
+}
+
+function syncMeshes(): void {
+  if (!gl || !program) return;
+  gl.useProgram(program);
+
+  if (props.mesh) {
+    const t = bindMesh(props.mesh, terrainPosBuf!, terrainIdxBuf!);
+    terrainIndexCount = t.count;
+    terrainUint32 = t.uint32;
+  } else {
+    terrainIndexCount = 0;
+  }
+
+  if (props.trailMesh) {
+    const t = bindMesh(props.trailMesh, trailPosBuf!, trailIdxBuf!);
+    trailIndexCount = t.count;
+    trailUint32 = t.uint32;
+  } else {
+    trailIndexCount = 0;
+  }
 }
 
 function draw(): void {
   const canvas = canvasRef.value;
-  if (!gl || !program || !canvas || indexCount === 0) return;
+  if (!gl || !program || !canvas) return;
+  if (terrainIndexCount === 0 && trailIndexCount === 0) {
+    raf = requestAnimationFrame(draw);
+    return;
+  }
 
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth;
   const h = canvas.clientHeight;
-  if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
+  if (
+    canvas.width !== Math.floor(w * dpr) ||
+    canvas.height !== Math.floor(h * dpr)
+  ) {
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -166,24 +217,28 @@ function draw(): void {
   const proj = perspective(0.9, aspect, 1, 800);
   const view = multiply(
     rotateX(0.55),
-    multiply(rotateY(angle), new Float32Array([
-      1, 0, 0, 0,
-      0, 1, 0, 0,
-      0, 0, 1, 0,
-      0, -15, -120, 1,
-    ])),
+    multiply(
+      rotateY(angle),
+      new Float32Array([
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -15, -120, 1,
+      ]),
+    ),
   );
   const mvp = multiply(proj, view);
-  const uMatrix = gl.getUniformLocation(program, "uMatrix");
-  gl.uniformMatrix4fv(uMatrix, false, mvp);
+  gl.uniformMatrix4fv(gl.getUniformLocation(program, "uMatrix"), false, mvp);
 
-  if (useUint32) {
-    const ext = gl.getExtension("OES_element_index_uint");
-    if (ext) {
-      gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0);
-    }
-  } else {
-    gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0);
+  const uTrail = gl.getUniformLocation(program, "uTrail");
+
+  if (terrainIndexCount > 0 && terrainPosBuf && terrainIdxBuf) {
+    gl.uniform1f(uTrail, 0);
+    bindMesh(props.mesh!, terrainPosBuf, terrainIdxBuf);
+    drawElements(terrainIndexCount, terrainUint32);
+  }
+
+  if (trailIndexCount > 0 && trailPosBuf && trailIdxBuf && props.trailMesh) {
+    gl.uniform1f(uTrail, 1);
+    bindMesh(props.trailMesh, trailPosBuf, trailIdxBuf);
+    drawElements(trailIndexCount, trailUint32);
   }
 
   raf = requestAnimationFrame(draw);
@@ -199,16 +254,12 @@ function resize(): void {
 }
 
 watch(
-  () => props.mesh,
-  (m) => {
-    if (m) {
-      uploadMesh(m);
-      if (!raf) raf = requestAnimationFrame(draw);
-    } else {
-      indexCount = 0;
-    }
+  () => [props.mesh, props.trailMesh],
+  () => {
+    syncMeshes();
+    if (!raf) raf = requestAnimationFrame(draw);
   },
-  { immediate: true },
+  { immediate: true, deep: true },
 );
 
 let ro: ResizeObserver | null = null;
@@ -217,7 +268,7 @@ onMounted(() => {
   const canvas = canvasRef.value;
   if (!canvas || !initGl(canvas)) return;
   resize();
-  if (props.mesh) uploadMesh(props.mesh);
+  syncMeshes();
   raf = requestAnimationFrame(draw);
   ro = new ResizeObserver(resize);
   ro.observe(canvas);
@@ -233,12 +284,19 @@ onUnmounted(() => {
 <template>
   <div class="terrain-preview">
     <canvas ref="canvasRef" class="terrain-preview__canvas" />
-    <div v-if="generating" class="terrain-preview__badge">正在生成地形…</div>
-    <div v-else-if="error" class="terrain-preview__badge terrain-preview__badge--err">
+    <div v-if="generating" class="terrain-preview__badge">正在生成地形与轨迹…</div>
+    <div
+      v-else-if="error"
+      class="terrain-preview__badge terrain-preview__badge--err"
+    >
       {{ error }}
     </div>
-    <div v-else-if="demLabel" class="terrain-preview__badge terrain-preview__badge--dim">
-      DEM: {{ demLabel }}
+    <div
+      v-else-if="demLabel"
+      class="terrain-preview__badge terrain-preview__badge--dim"
+    >
+      {{ demLabel }}
+      <span v-if="trailMesh"> · 红=轨迹件</span>
     </div>
   </div>
 </template>
@@ -268,12 +326,14 @@ onUnmounted(() => {
   color: var(--tp-text-secondary);
   pointer-events: none;
   z-index: 3;
+  white-space: nowrap;
 }
 
 .terrain-preview__badge--err {
   color: #c62828;
   max-width: 80%;
   text-align: center;
+  white-space: normal;
 }
 
 .terrain-preview__badge--dim {

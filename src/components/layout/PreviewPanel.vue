@@ -21,7 +21,8 @@ const mapRef = ref<InstanceType<typeof MapLeafletView> | null>(null);
 const surfaceRef = ref<HTMLElement | null>(null);
 const viewport = ref({ w: 800, h: 600 });
 
-const { generating, error, mesh, lastResult } = useTerrainGeneration(viewport);
+const { generating, error, mesh, trailMesh, lastResult } =
+  useTerrainGeneration(viewport);
 
 const demLabel = computed(() => {
   if (!lastResult.value) return "";
@@ -94,6 +95,7 @@ async function onDrop(e: DragEvent): Promise<void> {
       <TerrainMeshPreview
         v-if="previewMode === '3d'"
         :mesh="mesh"
+        :trail-mesh="trailMesh"
         :generating="generating"
         :error="error"
         :dem-label="mesh ? demLabel : undefined"

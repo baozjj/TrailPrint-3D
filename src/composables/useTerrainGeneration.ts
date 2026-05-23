@@ -17,6 +17,7 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
   const error = ref<string | null>(null);
   const lastResult = ref<TerrainGenerateResponse | null>(null);
   const mesh = ref<TerrainMeshPayload | null>(null);
+  const trailMesh = ref<TerrainMeshPayload | null>(null);
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let requestId = 0;
@@ -38,10 +39,12 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
       if (id !== requestId) return;
       lastResult.value = res;
       mesh.value = res.mesh;
+      trailMesh.value = res.trailMesh;
     } catch (err) {
       if (id !== requestId) return;
       error.value = formatIpcError(err);
       mesh.value = null;
+      trailMesh.value = null;
     } finally {
       if (id === requestId) generating.value = false;
     }
@@ -70,6 +73,12 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
       config.value.mapCrop.mapCenterLon,
       config.value.mapCrop.mapZoom,
       config.value.mapCrop.mapBearingDeg,
+      config.value.gpx.imported,
+      config.value.gpx.pointCount,
+      config.value.trail.gpxSimplify,
+      config.value.trail.trailWidthMm,
+      config.value.trail.trailDepthMm,
+      config.value.assembly.trailToleranceMm,
       viewport.value.w,
       viewport.value.h,
     ],
@@ -80,6 +89,7 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
     generating,
     error,
     mesh,
+    trailMesh,
     lastResult,
     regenerate: runGeneration,
   };
