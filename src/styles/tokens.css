@@ -1,0 +1,27 @@
+:root {
+  --tp-bg-page: #f5f5f7;
+  --tp-bg-glass: rgba(255, 255, 255, 0.8);
+  --tp-bg-panel: #ffffff;
+  --tp-bg-input: #f2f2f7;
+  --tp-bg-segment: #e8e8ed;
+  --tp-bg-footer: #fafafa;
+
+  --tp-text-primary: #1d1d1f;
+  --tp-text-secondary: #86868b;
+  --tp-text-accent: #007aff;
+
+  --tp-cta: #1d1d1f;
+  --tp-success: #34c759;
+  --tp-border: rgba(0, 0, 0, 0.06);
+  --tp-border-strong: rgba(0, 0, 0, 0.08);
+
+  --tp-radius-panel: 16px;
+  --tp-radius-control: 10px;
+  --tp-radius-pill: 26px;
+
+  --tp-shadow-panel: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --tp-shadow-segment: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --tp-shadow-cta: 0 4px 16px rgba(0, 0, 0, 0.2);
+
+  --tp-font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+}

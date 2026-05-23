@@ -1,0 +1,51 @@
+{
+  "name": "trailprint-3d",
+  "version": "0.1.0",
+  "description": "迹印 TrailPrint 3D — GPX 轨迹转 3D 地形纪念碑",
+  "main": "./out/main/index.js",
+  "author": "TrailPrint",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "npm run build && electron-builder",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.web.json --composite false && tsc --noEmit -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "pinia": "2.3.1",
+    "vue": "3.5.13"
+  },
+  "devDependencies": {
+    "@types/node": "22.14.1",
+    "@vitejs/plugin-vue": "5.2.3",
+    "electron": "35.1.5",
+    "electron-builder": "26.0.12",
+    "electron-vite": "3.1.0",
+    "typescript": "5.8.3",
+    "vite": "6.3.2",
+    "vue-tsc": "2.2.8"
+  },
+  "build": {
+    "appId": "com.trailprint.app",
+    "productName": "TrailPrint 3D",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "target": ["nsis", "zip"]
+    },
+    "linux": {
+      "target": ["AppImage", "deb"]
+    }
+  }
+}
