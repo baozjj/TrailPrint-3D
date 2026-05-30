@@ -2,10 +2,7 @@ import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { EngraveStyle } from "@shared/types";
 
-export type PreviewMode = "2d" | "3d";
-
 export const useUiStore = defineStore("ui", () => {
-  const previewMode = ref<PreviewMode>("2d");
   const openSections = ref<Record<string, boolean>>({
     map: true,
     terrain: true,
@@ -49,7 +46,6 @@ export const useUiStore = defineStore("ui", () => {
   }
 
   return {
-    previewMode,
     openSections,
     borderTextEnabled,
     globalEngraveStyle,

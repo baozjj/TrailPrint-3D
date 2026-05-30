@@ -5,15 +5,11 @@ import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
 import { useGpxImport } from "@/composables/useGpxImport";
 import { useTerrainGeneration } from "@/composables/useTerrainGeneration";
-import { useTrayGeneration } from "@/composables/useTrayGeneration";
-import type { PreviewMode } from "@/stores/ui";
-import SegmentedControl from "@/components/ui/SegmentedControl.vue";
 import MapLeafletView from "@/components/map/MapLeafletView.vue";
-import TerrainMeshPreview from "@/components/preview/TerrainMeshPreview.vue";
+import TerrainPreviewModal from "@/components/preview/TerrainPreviewModal.vue";
 
 const ui = useUiStore();
 const configStore = useConfigStore();
-const { previewMode } = storeToRefs(ui);
 const { config } = storeToRefs(configStore);
 const { importing, importFromFile } = useGpxImport();
 
@@ -22,28 +18,21 @@ const mapRef = ref<InstanceType<typeof MapLeafletView> | null>(null);
 const surfaceRef = ref<HTMLElement | null>(null);
 const viewport = ref({ w: 800, h: 600 });
 
+const terrainPreviewOpen = ref(false);
+const modalViewport = ref({ w: 960, h: 640 });
+
 function syncViewportToStore(): void {
   ui.previewViewport = { ...viewport.value };
 }
 
-const terrainGen = useTerrainGeneration(viewport);
-const trayGen = useTrayGeneration();
+const terrainGen = useTerrainGeneration(modalViewport, {
+  enabled: terrainPreviewOpen,
+});
 
-const generating = computed(() =>
-  previewMode.value === "3d"
-    ? terrainGen.generating.value
-    : terrainGen.generating.value || trayGen.generating.value,
-);
-const previewError = computed(() =>
-  previewMode.value === "3d"
-    ? terrainGen.error.value
-    : terrainGen.error.value || trayGen.error.value,
-);
 const { regenerate: regenerateTerrain } = terrainGen;
-const { regenerate: regenerateTray } = trayGen;
-
-/** 顶层 Ref，模板才能自动解包 */
 const terrainResult = toRef(terrainGen, "lastResult");
+const terrainGenerating = toRef(terrainGen, "generating");
+const terrainError = toRef(terrainGen, "error");
 
 let resizeObserver: ResizeObserver | null = null;
 
@@ -74,13 +63,6 @@ onUnmounted(() => {
   unregisterPrepareExport = null;
 });
 
-const viewOptions: { value: PreviewMode; label: string }[] = [
-  { value: "2d", label: "2D 地图视图" },
-  { value: "3d", label: "3D 模型预览" },
-];
-
-const show2dMap = computed(() => previewMode.value === "2d");
-
 function scheduleMapFit(): void {
   requestAnimationFrame(() => {
     mapRef.value?.fitTrackInView();
@@ -88,30 +70,40 @@ function scheduleMapFit(): void {
   });
 }
 
-watch(show2dMap, async (show) => {
-  if (!show) return;
-  syncPreviewViewport();
-  await nextTick();
-  syncPreviewViewport();
-  if (config.value.gpx.imported) scheduleMapFit();
-});
-
 watch(
   () => ui.gpxMapFitNonce,
   async () => {
-    if (!show2dMap.value || !config.value.gpx.imported) return;
+    if (!config.value.gpx.imported) return;
     await nextTick();
     scheduleMapFit();
   },
 );
 
-watch(previewMode, async (mode) => {
-  if (mode !== "3d") return;
-  syncPreviewViewport();
-  await nextTick();
-  syncPreviewViewport();
+async function openTerrainPreview(): Promise<void> {
+  if (!config.value.gpx.imported) {
+    ui.statusMessage = "请先导入 GPX 轨迹文件";
+    return;
+  }
+  ui.runPrepareExport();
+  terrainPreviewOpen.value = true;
+}
+
+function onTerrainModalOpened(): void {
   void regenerateTerrain();
-});
+}
+
+async function onDrop(e: DragEvent): Promise<void> {
+  e.preventDefault();
+  dragOver.value = false;
+  const file = e.dataTransfer?.files?.[0];
+  if (file) {
+    const ok = await importFromFile(file);
+    if (ok) {
+      await nextTick();
+      scheduleMapFit();
+    }
+  }
+}
 
 function onDragOver(e: DragEvent): void {
   e.preventDefault();
@@ -122,19 +114,7 @@ function onDragLeave(): void {
   dragOver.value = false;
 }
 
-async function onDrop(e: DragEvent): Promise<void> {
-  e.preventDefault();
-  dragOver.value = false;
-  const file = e.dataTransfer?.files?.[0];
-  if (file) {
-    const ok = await importFromFile(file);
-    if (ok) {
-      previewMode.value = "2d";
-      await nextTick();
-      scheduleMapFit();
-    }
-  }
-}
+const canOpen3d = computed(() => config.value.gpx.imported);
 </script>
 
 <template>
@@ -146,28 +126,10 @@ async function onDrop(e: DragEvent): Promise<void> {
     @drop="onDrop"
   >
     <div ref="surfaceRef" class="preview__surface">
-      <MapLeafletView v-if="show2dMap" ref="mapRef" />
+      <MapLeafletView ref="mapRef" />
 
-      <TerrainMeshPreview
-        v-if="previewMode === '3d'"
-        class="preview__terrain-3d"
-        :result="terrainResult"
-        :generating="generating"
-        :error="previewError"
-      />
-
-      <div
-        v-if="
-          (show2dMap && !config.gpx.imported) ||
-          (previewMode === '3d' &&
-            !terrainResult &&
-            !generating &&
-            !previewError)
-        "
-        class="preview__placeholder"
-      >
+      <div v-if="!config.gpx.imported" class="preview__placeholder">
         <svg
-          v-if="show2dMap && !config.gpx.imported"
           class="preview__icon"
           width="48"
           height="48"
@@ -181,42 +143,66 @@ async function onDrop(e: DragEvent): Promise<void> {
           <path d="M16 6v16" />
         </svg>
         <p class="preview__title">
-          {{
-            dragOver
-              ? "松开以导入 GPX"
-              : previewMode === "3d"
-                ? "3D 模型预览"
-                : "导入 GPX 显示卫星地图与轨迹"
-          }}
+          {{ dragOver ? "松开以导入 GPX" : "导入 GPX 显示卫星地图与轨迹" }}
         </p>
         <p class="preview__hint">
           {{
             importing
               ? "正在解析轨迹…"
-              : previewMode === "3d"
-                ? "将显示 2D 白框内的山体 3D 模型（不含托盘底座）"
-                : "拖动 GPX 到此处 · 或点击左侧「导入 GPX」"
+              : "拖动 GPX 到此处 · 或点击左侧「导入 GPX」"
           }}
         </p>
       </div>
 
-      <div v-if="show2dMap && config.gpx.imported" class="preview__hint-bar">
+      <div v-if="config.gpx.imported" class="preview__hint-bar">
         <span
           >拖动平移 · 滚轮缩放 · 白框=山体 · 黄框=托盘外缘 ·
-          刻字显示在黄框边带上 · 3D 视图可看立体效果</span
+          刻字显示在黄框边带上 · 右上角可打开 3D 预览</span
         >
       </div>
 
-      <div class="preview__topbar">
-        <SegmentedControl
-          v-model="previewMode"
-          :options="viewOptions"
-          dark-active
-        />
-      </div>
+      <button
+        type="button"
+        class="preview__3d-btn"
+        :disabled="!canOpen3d"
+        title="预览 3D 山体模型"
+        @click="openTerrainPreview"
+      >
+        <svg
+          class="preview__3d-btn-icon"
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M12 3L2 9l10 6 10-6-10-6z"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linejoin="round"
+          />
+          <path
+            d="M2 15l10 6 10-6M2 11l10 6 10-6"
+            stroke="currentColor"
+            stroke-width="1.75"
+            stroke-linejoin="round"
+          />
+        </svg>
+        3D 预览
+      </button>
 
       <div v-if="dragOver" class="preview__drop-overlay" />
     </div>
+
+    <TerrainPreviewModal
+      v-model="terrainPreviewOpen"
+      v-model:viewport="modalViewport"
+      :result="terrainResult"
+      :generating="terrainGenerating"
+      :error="terrainError"
+      @opened="onTerrainModalOpened"
+    />
   </section>
 </template>
 
@@ -241,12 +227,6 @@ async function onDrop(e: DragEvent): Promise<void> {
   min-height: 0;
   position: relative;
   background: #1a1a2e;
-}
-
-.preview__terrain-3d {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
 }
 
 .preview__placeholder {
@@ -297,21 +277,44 @@ async function onDrop(e: DragEvent): Promise<void> {
   text-align: center;
 }
 
-.preview__topbar {
+.preview__3d-btn {
   position: absolute;
-  top: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(400px, calc(100% - 48px));
-  padding: 4px;
-  background: rgba(255, 255, 255, 0.85);
+  top: 16px;
+  right: 16px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 12px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  z-index: 5;
-  pointer-events: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-text-primary);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s,
+    opacity 0.15s;
+}
+
+.preview__3d-btn:hover:not(:disabled) {
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+
+.preview__3d-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.preview__3d-btn-icon {
+  flex-shrink: 0;
+  color: var(--tp-text-accent);
 }
 
 .preview__drop-overlay {

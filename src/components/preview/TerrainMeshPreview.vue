@@ -15,6 +15,8 @@ const props = defineProps<{
   result: TerrainGenerateResponse | null;
   generating?: boolean;
   error?: string | null;
+  /** 弹窗模式：生成中不显示底部角标（由外层 loading 负责） */
+  overlayLoading?: boolean;
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -217,7 +219,10 @@ onUnmounted(() => {
 <template>
   <div class="terrain-preview">
     <div ref="containerRef" class="terrain-preview__viewport" />
-    <div v-if="generating" class="terrain-preview__badge">
+    <div
+      v-if="generating && !overlayLoading"
+      class="terrain-preview__badge"
+    >
       正在生成山体 3D 模型…
     </div>
     <div

@@ -57,10 +57,7 @@ function openGpxPicker(): void {
 async function onGpxSelected(e: Event): Promise<void> {
   const file = (e.target as HTMLInputElement).files?.[0]
   if (!file) return
-  const ok = await importFromFile(file)
-  if (ok) {
-    ui.previewMode = '2d'
-  }
+  await importFromFile(file)
   ;(e.target as HTMLInputElement).value = ''
 }
 

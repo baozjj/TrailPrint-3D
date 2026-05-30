@@ -26,7 +26,6 @@ export function useGpxImport() {
       const req = await buildParseRequest(file)
       const { result } = await ipcParseGpx(req)
       configStore.applyGpxImport(result, file.name, (file as ElectronFile).path)
-      ui.previewMode = '2d'
       ui.requestGpxMapFit()
       ui.statusMessage = `${formatImportSummary(result.trackName, result.pointCount, result.distanceKm)} · 已在卫星地图上显示红色轨迹`
       return true
@@ -46,7 +45,6 @@ export function useGpxImport() {
     try {
       const { result } = await ipcParseGpx({ filePath, fileName })
       configStore.applyGpxImport(result, fileName, filePath)
-      ui.previewMode = '2d'
       ui.requestGpxMapFit()
       ui.statusMessage = `${formatImportSummary(result.trackName, result.pointCount, result.distanceKm)} · 已在卫星地图上显示红色轨迹`
       return true

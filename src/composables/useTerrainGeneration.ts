@@ -9,7 +9,11 @@ import type {
 
 const DEBOUNCE_MS = 450;
 
-export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
+export function useTerrainGeneration(
+  viewport: Ref<{ w: number; h: number }>,
+  options?: { enabled?: Ref<boolean> },
+) {
+  const enabled = options?.enabled;
   const configStore = useConfigStore();
   const { config } = storeToRefs(configStore);
 
@@ -68,6 +72,7 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
 
   watch(
     () => [
+      enabled?.value ?? true,
       config.value.terrain.baseSolidThicknessMm,
       config.value.terrain.zExaggeration,
       config.value.terrain.smoothing,
@@ -96,8 +101,10 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
       viewport.value.w,
       viewport.value.h,
     ],
-    () => scheduleGeneration(),
-    { immediate: true },
+    () => {
+      if (enabled && !enabled.value) return;
+      scheduleGeneration();
+    },
   );
 
   return {
