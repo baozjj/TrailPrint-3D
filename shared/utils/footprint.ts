@@ -36,6 +36,61 @@ export function buildFootprintPolygonMm(
   return null;
 }
 
+/** 将模型平面点投影到打印外轮廓边界（用于封闭顶面、消除边缘镂空） */
+export function projectToFootprintMm(
+  xMm: number,
+  yMm: number,
+  crop: TerrainCropRegion,
+): { x: number; y: number } {
+  if (isInsidePrintFootprintMm(xMm, yMm, crop)) {
+    return { x: xMm, y: yMm };
+  }
+  if (crop.shape === "circle") {
+    const r = crop.radiusMm ?? Math.min(crop.widthMm, crop.heightMm) / 2;
+    const d = Math.hypot(xMm, yMm);
+    if (d <= 1e-9) return { x: 0, y: 0 };
+    return { x: (xMm * r) / d, y: (yMm * r) / d };
+  }
+  if (crop.shape === "rectangle") {
+    const hw = crop.widthMm / 2;
+    const hh = crop.heightMm / 2;
+    return {
+      x: Math.max(-hw, Math.min(hw, xMm)),
+      y: Math.max(-hh, Math.min(hh, yMm)),
+    };
+  }
+  const polygon = buildFootprintPolygonMm(crop);
+  if (polygon && polygon.length >= 3) {
+    let bestX = polygon[0]!.x;
+    let bestY = polygon[0]!.y;
+    let bestD = Infinity;
+    for (let i = 0; i < polygon.length; i++) {
+      const a = polygon[i]!;
+      const b = polygon[(i + 1) % polygon.length]!;
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const len2 = dx * dx + dy * dy;
+      const t =
+        len2 < 1e-12
+          ? 0
+          : Math.max(
+              0,
+              Math.min(1, ((xMm - a.x) * dx + (yMm - a.y) * dy) / len2),
+            );
+      const px = a.x + t * dx;
+      const py = a.y + t * dy;
+      const d = (xMm - px) ** 2 + (yMm - py) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        bestX = px;
+        bestY = py;
+      }
+    }
+    return { x: bestX, y: bestY };
+  }
+  return { x: xMm, y: yMm };
+}
+
 /** 模型平面 (mm) 内是否落在打印外轮廓内 */
 export function isInsidePrintFootprintMm(
   xMm: number,

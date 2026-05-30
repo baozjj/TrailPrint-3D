@@ -58,6 +58,10 @@ export interface TerrainGenerateRequest {
   /** 地图视窗像素尺寸（与遮罩几何一致） */
   viewportWidth: number;
   viewportHeight: number;
+  /** 3D 弹窗预览：更高 DEM 网格密度；不挖轨迹槽（轨迹用圆管叠加） */
+  highQualityPreview?: boolean;
+  /** STL 导出：与预览同密度 DEM，并执行轨迹挖槽 */
+  stlExport?: boolean;
   /** 可选：任务-04 传入时执行挖槽（当前为占位直通） */
   trailGroove?: TrailGrooveSpec;
   /**

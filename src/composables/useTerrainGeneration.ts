@@ -75,6 +75,7 @@ export function useTerrainGeneration(
       enabled?.value ?? true,
       config.value.terrain.baseSolidThicknessMm,
       config.value.terrain.zExaggeration,
+      config.value.terrain.meshQuality,
       config.value.terrain.smoothing,
       config.value.terrain.demDataset,
       config.value.terrain.openTopographyApiKey,

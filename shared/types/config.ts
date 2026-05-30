@@ -31,9 +31,14 @@ export interface MapCropConfig {
 
 export type TerrainSmoothing = "raw" | "light" | "medium" | "heavy";
 
+/** 地形 DEM 网格与 3D 预览精度 */
+export type TerrainMeshQuality = "standard" | "high" | "ultra";
+
 export interface TerrainConfig {
   baseSolidThicknessMm: number;
   zExaggeration: number;
+  /** DEM 网格密度：影响 3D 预览与 STL 导出 */
+  meshQuality: TerrainMeshQuality;
   smoothing: TerrainSmoothing;
   /** OpenTopography 数据集，见 shared/types/dem.ts */
   demDataset: OpenTopoDemType;
@@ -161,6 +166,7 @@ export function createDefaultConfig(): AppConfig {
     terrain: {
       baseSolidThicknessMm: 3,
       zExaggeration: 2,
+      meshQuality: "high",
       smoothing: "light",
       demDataset: "COP30",
       openTopographyApiKey: "",

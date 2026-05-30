@@ -38,12 +38,44 @@ config.mapCrop.mapZoom = 14;
 config.mapCrop.shape = "circle";
 config.mapCrop.radiusMm = 80;
 
-const res = await generateTerrainMain({
+import { buildHeightfieldTerrainMesh } from "../shared/utils/heightfield-mesh.ts";
+import { analyzeMesh, weldMeshVertices } from "./validate-mesh.ts";
+
+const resPreview = await generateTerrainMain({
   config,
   viewportWidth: 900,
   viewportHeight: 700,
+  highQualityPreview: true,
 });
-console.log("dem source:", res.demSource);
+
+const resExport = await generateTerrainMain({
+  config,
+  viewportWidth: 900,
+  viewportHeight: 700,
+  stlExport: true,
+});
+
+const hp = resExport.heightPreview;
+const rebuilt = buildHeightfieldTerrainMesh(
+  resExport.crop,
+  hp.heights,
+  hp.cols,
+  hp.rows,
+  hp.baseThicknessMm,
+);
+
+console.log("dem source:", resExport.demSource);
+console.log("mesh analysis:");
+for (const [label, mesh] of [
+  ["preview-server-mesh", resPreview.mesh],
+  ["export-server-mesh", resExport.mesh],
+  ["export-rebuilt-no-holes", rebuilt],
+  ["export-welded-0.5", weldMeshVertices(resExport.mesh, 0.5)],
+] as const) {
+  console.log(label, analyzeMesh(mesh));
+}
+
+const res = resExport;
 
 const zs = res.heightPreview.heights;
 let minZ = Infinity;

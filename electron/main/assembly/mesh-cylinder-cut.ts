@@ -36,7 +36,8 @@ function isInsideCut(
   return z >= cut.zBottom - EPS && z <= cut.zTop + EPS;
 }
 
-function triangleTouchesCut(
+/** 仅当三角面完全落在圆柱内才剔除，避免误删边界面导致大面积镂空 */
+function triangleFullyInsideCut(
   positions: number[],
   i0: number,
   i1: number,
@@ -46,17 +47,50 @@ function triangleTouchesCut(
   const v0 = vertexAt(positions, i0);
   const v1 = vertexAt(positions, i1);
   const v2 = vertexAt(positions, i2);
-  if (
-    isInsideCut(v0.x, v0.y, v0.z, cut) ||
-    isInsideCut(v1.x, v1.y, v1.z, cut) ||
+  return (
+    isInsideCut(v0.x, v0.y, v0.z, cut) &&
+    isInsideCut(v1.x, v1.y, v1.z, cut) &&
     isInsideCut(v2.x, v2.y, v2.z, cut)
-  ) {
-    return true;
+  );
+}
+
+function appendCylinderCap(
+  positions: number[],
+  indices: number[],
+  cut: CylinderCut,
+  z: number,
+  outwardNormalUp: boolean,
+): void {
+  const center = pushVertex(positions, cut.x, cut.y, z);
+  const ring: number[] = [];
+  for (let s = 0; s < WALL_SEGMENTS; s++) {
+    const a = (s / WALL_SEGMENTS) * Math.PI * 2;
+    ring.push(
+      pushVertex(
+        positions,
+        cut.x + cut.radius * Math.cos(a),
+        cut.y + cut.radius * Math.sin(a),
+        z,
+      ),
+    );
   }
-  const cx = (v0.x + v1.x + v2.x) / 3;
-  const cy = (v0.y + v1.y + v2.y) / 3;
-  const cz = (v0.z + v1.z + v2.z) / 3;
-  return isInsideCut(cx, cy, cz, cut);
+  for (let s = 0; s < WALL_SEGMENTS; s++) {
+    const a = ring[s]!;
+    const b = ring[(s + 1) % WALL_SEGMENTS]!;
+    if (outwardNormalUp) indices.push(center, a, b);
+    else indices.push(center, b, a);
+  }
+}
+
+function pushVertex(
+  positions: number[],
+  x: number,
+  y: number,
+  z: number,
+): number {
+  const idx = positions.length / 3;
+  positions.push(x, y, z);
+  return idx;
 }
 
 function appendCylinderWall(
@@ -110,7 +144,7 @@ export function applyCylinderCuts(
     const i1 = mesh.indices[t + 1]!;
     const i2 = mesh.indices[t + 2]!;
     const remove = cuts.some((cut) =>
-      triangleTouchesCut(mesh.positions, i0, i1, i2, cut),
+      triangleFullyInsideCut(mesh.positions, i0, i1, i2, cut),
     );
     if (!remove) {
       kept.push(i0, i1, i2);
@@ -120,6 +154,7 @@ export function applyCylinderCuts(
   const indices = kept;
   for (const cut of cuts) {
     appendCylinderWall(positions, indices, cut);
+    appendCylinderCap(positions, indices, cut, cut.zTop, true);
   }
 
   return {

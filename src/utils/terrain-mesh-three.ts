@@ -1,11 +1,16 @@
 import * as THREE from "three";
+import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type {
   TerrainCropRegion,
   TerrainHeightPreview,
 } from "@shared/types/terrain";
 import type { TerrainMeshPayload } from "@shared/types/terrain";
 import { buildFootprintPolygonMm } from "@shared/utils/footprint";
-import { buildHeightfieldTerrainMesh } from "@shared/utils/heightfield-mesh";
+import {
+  buildHeightfieldTerrainMesh,
+  sampleHeightBilinearMm,
+} from "@shared/utils/heightfield-mesh";
+import { projectToFootprintMm } from "@shared/utils/footprint";
 
 /** 在高度场（行优先 mm）上双线性采样表面 Z */
 function sampleHeightPreviewZ(
@@ -14,26 +19,16 @@ function sampleHeightPreviewZ(
   preview: TerrainHeightPreview,
   crop: TerrainCropRegion,
 ): number {
-  const { cols, rows, heights } = preview;
-  const hw = crop.widthMm / 2;
-  const hh = crop.heightMm / 2;
-  const s = (xMm + hw) / Math.max(crop.widthMm, 1e-6);
-  const t = (yMm + hh) / Math.max(crop.heightMm, 1e-6);
-  const colF = s * (cols - 1);
-  const rowF = t * (rows - 1);
-  const c0 = Math.max(0, Math.min(cols - 1, Math.floor(colF)));
-  const r0 = Math.max(0, Math.min(rows - 1, Math.floor(rowF)));
-  const c1 = Math.min(cols - 1, c0 + 1);
-  const r1 = Math.min(rows - 1, r0 + 1);
-  const fc = colF - c0;
-  const fr = rowF - r0;
-  const z00 = heights[r0 * cols + c0] ?? 0;
-  const z10 = heights[r0 * cols + c1] ?? z00;
-  const z01 = heights[r1 * cols + c0] ?? z00;
-  const z11 = heights[r1 * cols + c1] ?? z10;
-  const z0 = z00 * (1 - fc) + z10 * fc;
-  const z1 = z01 * (1 - fc) + z11 * fc;
-  return z0 * (1 - fr) + z1 * fr;
+  const p = projectToFootprintMm(xMm, yMm, crop);
+  return sampleHeightBilinearMm(
+    p.x,
+    p.y,
+    preview.heights,
+    preview.cols,
+    preview.rows,
+    crop,
+    preview.minSurfaceZ,
+  );
 }
 
 /** 3D 预览专用：沿轨迹生成贴地圆管，保证红色轨迹清晰可见 */
@@ -68,28 +63,40 @@ export function buildTrailTubeGeometry(
   );
 }
 
+/** 高精度网格顶点常 >65535，统一用 Uint32 避免索引截断导致「镂空」 */
 function createIndexAttribute(indices: number[]): THREE.BufferAttribute {
-  let max = 0;
-  for (let i = 0; i < indices.length; i++) {
-    const v = indices[i]!;
-    if (v > max) max = v;
-    if (max > 65535) {
-      return new THREE.Uint32BufferAttribute(indices, 1);
-    }
+  return new THREE.Uint32BufferAttribute(indices, 1);
+}
+
+function applyTerrainUvs(
+  geometry: THREE.BufferGeometry,
+  crop: TerrainCropRegion,
+): void {
+  const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const uvs = new Float32Array(pos.count * 2);
+  const hw = crop.widthMm / 2;
+  const hh = crop.heightMm / 2;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    uvs[i * 2] = THREE.MathUtils.clamp((x + hw) / crop.widthMm, 0, 1);
+    uvs[i * 2 + 1] = THREE.MathUtils.clamp((y + hh) / crop.heightMm, 0, 1);
   }
-  return new THREE.Uint16BufferAttribute(indices, 1);
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 }
 
 export function payloadToBufferGeometry(
   payload: TerrainMeshPayload,
-  options?: { terrain?: boolean },
+  options?: { terrain?: boolean; crop?: TerrainCropRegion },
 ): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   const pos = new Float32Array(payload.positions);
   geometry.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   geometry.setIndex(createIndexAttribute(payload.indices));
 
-  if (options?.terrain && pos.length >= 3) {
+  if (options?.crop) {
+    applyTerrainUvs(geometry, options.crop);
+  } else if (options?.terrain && pos.length >= 3) {
     let minZ = Infinity;
     let maxZ = -Infinity;
     for (let i = 2; i < pos.length; i += 3) {
@@ -112,10 +119,13 @@ export function payloadToBufferGeometry(
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   }
 
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-  return geometry;
+  const merged = mergeVertices(geometry, 0.02);
+  geometry.dispose();
+  merged.computeVertexNormals();
+  merged.normalizeNormals();
+  merged.computeBoundingBox();
+  merged.computeBoundingSphere();
+  return merged;
 }
 
 /** 在渲染进程由高度场重建山体（与主进程 STL 同源算法） */
@@ -130,7 +140,7 @@ export function buildTerrainGeometryFromPreview(
     preview.rows,
     preview.baseThicknessMm,
   );
-  return payloadToBufferGeometry(mesh, { terrain: true });
+  return payloadToBufferGeometry(mesh, { crop });
 }
 
 export function createFootprintOutline(

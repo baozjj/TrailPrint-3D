@@ -100,7 +100,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               <div class="terrain-modal__spinner" aria-hidden="true" />
               <p class="terrain-modal__loading-title">正在生成 3D 模型</p>
               <p class="terrain-modal__loading-hint">
-                正在获取 DEM 高程并构建山体网格，请稍候…
+                正在获取 DEM 高程、拼接卫星影像并构建 3D 网格，请稍候…
               </p>
             </div>
 

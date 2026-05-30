@@ -16,6 +16,7 @@ import { IpcException } from "@shared/ipc/types";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import { generateTerrainMain } from "../terrain/terrain-main-service";
 import { generateTrayBase } from "../tray/tray-service";
+import { assertWatertightMesh } from "@shared/utils/mesh-manifold";
 import { writeBinaryStl } from "./stl-writer";
 import { packZip } from "./zip-packager";
 
@@ -83,6 +84,7 @@ export async function generateModelsZip(
     config,
     viewportWidth,
     viewportHeight,
+    stlExport: true,
     trailLineWidthMm: trailLineWidthMmForPrint(config),
   });
 
@@ -117,6 +119,11 @@ export async function generateModelsZip(
     const terrainStl = join(workDir, STL_FILE_NAMES.terrainMain);
     const trailStl = join(workDir, STL_FILE_NAMES.trailLine);
     const trayStl = join(workDir, STL_FILE_NAMES.trayBase);
+
+    assertWatertightMesh(terrainWithGroove.mesh, "Terrain_Main");
+    if (terrainWithGroove.trailMesh) {
+      assertWatertightMesh(terrainWithGroove.trailMesh, "Trail_Line");
+    }
 
     await writeBinaryStl(terrainStl, terrainWithGroove.mesh, "Terrain_Main");
     await writeBinaryStl(trailStl, terrainWithGroove.trailMesh, "Trail_Line");

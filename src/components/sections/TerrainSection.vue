@@ -1,19 +1,34 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { TerrainSmoothing } from '@shared/types'
-import { OPEN_TOPO_DEM_OPTIONS } from '@shared/types/dem'
+import type { TerrainMeshQuality, TerrainSmoothing } from '@shared/types'
+import { terrainMeshQualitySpec } from '@shared/utils/terrain-mesh-quality'
+import { OPEN_TOPO_DEM_OPTIONS, openTopoDemTooltipText } from '@shared/types/dem'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
 import AccordionSection from '@/components/ui/AccordionSection.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import NumberField from '@/components/ui/NumberField.vue'
 import RangeSlider from '@/components/ui/RangeSlider.vue'
+import InfoTooltip from '@/components/ui/InfoTooltip.vue'
+
+const demTooltipText = openTopoDemTooltipText()
 
 const configStore = useConfigStore()
 const ui = useUiStore()
 const { config } = storeToRefs(configStore)
 const { openSections } = storeToRefs(ui)
+
+const meshQualityOptions: { value: TerrainMeshQuality; label: string }[] = [
+  { value: 'standard', label: '标准' },
+  { value: 'high', label: '高精' },
+  { value: 'ultra', label: '超高' }
+]
+
+const meshQualityHint = computed(() => {
+  const s = terrainMeshQualitySpec(config.value.terrain.meshQuality)
+  return `DEM 网格约 ${s.maxGrid}×${s.maxGrid}，卫星贴图 ${s.texturePx}px（预览与导出一致）`
+})
 
 const smoothingOptions: { value: TerrainSmoothing; label: string }[] = [
   { value: 'raw', label: '原始' },
@@ -58,12 +73,27 @@ const demHint = computed(() => {
       :format="(v) => `${v.toFixed(1)}x`"
     />
     <div class="field-group">
+      <span class="field-group__label">网格精度</span>
+      <SegmentedControl
+        v-model="config.terrain.meshQuality"
+        :options="meshQualityOptions"
+      />
+      <p class="field-hint">{{ meshQualityHint }}</p>
+      <p class="field-hint">超高精度生成更慢，建议 DEM 使用 COP30 (30m)。</p>
+    </div>
+    <div class="field-group">
       <span class="field-group__label">地形平滑度</span>
       <SegmentedControl v-model="config.terrain.smoothing" :options="smoothingOptions" />
     </div>
 
     <div class="field-group">
-      <label class="field-group__label" for="dem-dataset">DEM 数据源（OpenTopography）</label>
+      <div class="field-group__label-row">
+        <label class="field-group__label" for="dem-dataset">DEM 数据源（OpenTopography）</label>
+        <InfoTooltip
+          aria-label="DEM 数据源说明"
+          :content="demTooltipText"
+        />
+      </div>
       <select
         id="dem-dataset"
         v-model="config.terrain.demDataset"
@@ -83,6 +113,12 @@ const demHint = computed(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.field-group__label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .field-group__label {
