@@ -38,8 +38,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
 
 .segmented__item {
   flex: 1;
+  min-width: 0;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--tp-text-secondary);
   transition: background 0.15s, color 0.15s, box-shadow 0.15s;
 }

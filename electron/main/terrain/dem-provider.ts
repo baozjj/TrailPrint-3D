@@ -19,7 +19,7 @@ export async function sampleDemGrid(
   mapCrop: MapCropConfig,
   viewportWidth: number,
   viewportHeight: number,
-  options: DemFetchOptions,
+  options: DemFetchOptions & { fetchTimeoutMs?: number },
 ): Promise<DemGrid> {
   const { lats, lons } = heightfieldSampleGeo(
     crop,
@@ -36,6 +36,7 @@ export async function sampleDemGrid(
     options.openTopographyApiKey,
     lats,
     lons,
+    { fetchTimeoutMs: options.fetchTimeoutMs },
   );
 
   return { cols, rows, elevations, source: "opentopography" };

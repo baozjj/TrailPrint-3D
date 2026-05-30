@@ -23,6 +23,7 @@ import {
 } from "@shared/utils/map-projection";
 import {
   gridResolutionForQuality,
+  STUDIO_DEM_FETCH_TIMEOUT_MS,
   terrainMeshQualitySpec,
 } from "@shared/utils/terrain-mesh-quality";
 import type { TerrainMeshQuality } from "@shared/types/config";
@@ -54,10 +55,7 @@ function heightsToMm(
     (crop.maxLon - crop.minLon) * metersPerDegreeLon(latMid),
     1,
   );
-  const geoH = Math.max(
-    (crop.maxLat - crop.minLat) * metersPerDegreeLat(),
-    1,
-  );
+  const geoH = Math.max((crop.maxLat - crop.minLat) * metersPerDegreeLat(), 1);
   const horizMm = Math.max(crop.widthMm, crop.heightMm, 20);
   /** 模型 1mm 水平 ≈ 多少米地理距离；垂直同比例 ×1000 换算为 mm */
   const mmPerMeter = horizMm / Math.max(geoW, geoH);
@@ -118,6 +116,8 @@ export async function generateTerrainMain(
     {
       dataset: config.terrain.demDataset,
       openTopographyApiKey: config.terrain.openTopographyApiKey,
+      fetchTimeoutMs:
+        meshQuality === "studio" ? STUDIO_DEM_FETCH_TIMEOUT_MS : undefined,
     },
   );
 

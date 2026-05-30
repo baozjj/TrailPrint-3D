@@ -32,7 +32,12 @@ export interface MapCropConfig {
 export type TerrainSmoothing = "raw" | "light" | "medium" | "heavy";
 
 /** 地形 DEM 网格与 3D 预览精度 */
-export type TerrainMeshQuality = "standard" | "high" | "ultra";
+export type TerrainMeshQuality =
+  | "standard"
+  | "high"
+  | "ultra"
+  | "extreme"
+  | "studio";
 
 export interface TerrainConfig {
   baseSolidThicknessMm: number;

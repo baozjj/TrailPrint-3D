@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { TerrainMeshQuality, TerrainSmoothing } from '@shared/types'
-import { terrainMeshQualitySpec } from '@shared/utils/terrain-mesh-quality'
+import {
+  demSampleCount,
+  meshQualitySummary
+} from '@shared/utils/terrain-mesh-quality'
 import { OPEN_TOPO_DEM_OPTIONS, openTopoDemTooltipText } from '@shared/types/dem'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
@@ -22,12 +25,27 @@ const { openSections } = storeToRefs(ui)
 const meshQualityOptions: { value: TerrainMeshQuality; label: string }[] = [
   { value: 'standard', label: '标准' },
   { value: 'high', label: '高精' },
-  { value: 'ultra', label: '超高' }
+  { value: 'ultra', label: '超高' },
+  { value: 'extreme', label: '极致' },
+  { value: 'studio', label: '制版' }
 ]
 
-const meshQualityHint = computed(() => {
-  const s = terrainMeshQualitySpec(config.value.terrain.meshQuality)
-  return `DEM 网格约 ${s.maxGrid}×${s.maxGrid}，卫星贴图 ${s.texturePx}px（预览与导出一致）`
+const meshQualityHint = computed(() =>
+  meshQualitySummary(config.value.mapCrop, config.value.terrain.meshQuality)
+)
+
+const meshQualityPerfHint = computed(() => {
+  const n = demSampleCount(
+    config.value.mapCrop,
+    config.value.terrain.meshQuality
+  )
+  if (config.value.terrain.meshQuality === 'studio') {
+    return `约 ${(n / 1e6).toFixed(1)}M 高程采样；STL 可能达数百 MB，建议 16GB+ 内存。DEM 请用 COP30，平滑用「原始」。`
+  }
+  if (config.value.terrain.meshQuality === 'extreme') {
+    return `约 ${Math.round(n / 1000)}k 采样；生成较慢。建议 DEM 用 COP30 (30m)，平滑用「原始/轻度」。`
+  }
+  return '更高档位生成与导出更慢；源 DEM 分辨率（如 COP30 30m）决定地形细节上限。'
 })
 
 const smoothingOptions: { value: TerrainSmoothing; label: string }[] = [
@@ -73,13 +91,22 @@ const demHint = computed(() => {
       :format="(v) => `${v.toFixed(1)}x`"
     />
     <div class="field-group">
-      <span class="field-group__label">网格精度</span>
-      <SegmentedControl
+      <label class="field-group__label" for="mesh-quality">网格精度</label>
+      <select
+        id="mesh-quality"
         v-model="config.terrain.meshQuality"
-        :options="meshQualityOptions"
-      />
+        class="text-input"
+      >
+        <option
+          v-for="opt in meshQualityOptions"
+          :key="opt.value"
+          :value="opt.value"
+        >
+          {{ opt.label }}
+        </option>
+      </select>
       <p class="field-hint">{{ meshQualityHint }}</p>
-      <p class="field-hint">超高精度生成更慢，建议 DEM 使用 COP30 (30m)。</p>
+      <p class="field-hint">{{ meshQualityPerfHint }}</p>
     </div>
     <div class="field-group">
       <span class="field-group__label">地形平滑度</span>

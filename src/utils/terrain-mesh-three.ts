@@ -37,6 +37,7 @@ export function buildTrailTubeGeometry(
   preview: TerrainHeightPreview,
   crop: TerrainCropRegion,
   widthMm: number,
+  tubularSegments?: number,
 ): THREE.BufferGeometry | null {
   if (polyline.length < 2 || widthMm <= 0) return null;
 
@@ -52,11 +53,13 @@ export function buildTrailTubeGeometry(
   if (points.length < 2) return null;
 
   const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.12);
-  const tubularSegments = Math.max(32, Math.min(512, points.length * 4));
+  const segments =
+    tubularSegments ??
+    Math.max(32, Math.min(1024, points.length * 4));
   const radialSegments = 8;
   return new THREE.TubeGeometry(
     curve,
-    tubularSegments,
+    segments,
     radius,
     radialSegments,
     false,

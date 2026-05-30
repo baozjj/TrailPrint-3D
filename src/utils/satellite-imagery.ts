@@ -3,7 +3,8 @@ import type { TerrainCropRegion } from "@shared/types/terrain";
 const ESRI_TILE =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TILE_SIZE = 256;
-const MAX_TEXTURE_PX = 1024;
+/** 单张卫星贴图最长边上限，避免超出常见 GPU 纹理限制 */
+const MAX_TEXTURE_PX = 8192;
 
 function lonLatToTileXY(
   lon: number,
@@ -51,15 +52,16 @@ function loadTile(url: string): Promise<HTMLImageElement> {
  */
 export async function fetchSatelliteTextureForCrop(
   crop: TerrainCropRegion,
-  targetPx = MAX_TEXTURE_PX,
+  targetPx = 2048,
 ): Promise<HTMLCanvasElement> {
+  const cappedPx = Math.min(Math.max(256, targetPx), MAX_TEXTURE_PX);
   const pad = 0.00015;
   const minLon = crop.minLon - pad;
   const maxLon = crop.maxLon + pad;
   const minLat = crop.minLat - pad;
   const maxLat = crop.maxLat + pad;
 
-  const z = pickZoom(minLon, maxLon, minLat, maxLat, targetPx);
+  const z = pickZoom(minLon, maxLon, minLat, maxLat, cappedPx);
   const tl = lonLatToTileXY(minLon, maxLat, z);
   const br = lonLatToTileXY(maxLon, minLat, z);
   const tileCountX = br.x - tl.x + 1;
@@ -91,9 +93,9 @@ export async function fetchSatelliteTextureForCrop(
 
   await Promise.all(jobs);
 
-  if (canvasW <= targetPx && canvasH <= targetPx) return canvas;
+  if (canvasW <= cappedPx && canvasH <= cappedPx) return canvas;
 
-  const scale = targetPx / Math.max(canvasW, canvasH);
+  const scale = cappedPx / Math.max(canvasW, canvasH);
   const outW = Math.max(64, Math.round(canvasW * scale));
   const outH = Math.max(64, Math.round(canvasH * scale));
   const out = document.createElement("canvas");

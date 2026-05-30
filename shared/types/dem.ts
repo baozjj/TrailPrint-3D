@@ -61,8 +61,7 @@ export const OPEN_TOPO_DEM_OPTIONS: ReadonlyArray<OpenTopoDemOption> = [
     label: "SRTM 90m",
     hint: "低分辨率 · 仅适合大体轮廓",
     resolution: "约 90 m（3 角秒）",
-    summary:
-      "SRTM 的粗分辨率版本，与 COP90 类似，难以表现细微地形起伏。",
+    summary: "SRTM 的粗分辨率版本，与 COP90 类似，难以表现细微地形起伏。",
     bestFor: "快速试看、对细节要求很低时。",
   },
 ] as const;

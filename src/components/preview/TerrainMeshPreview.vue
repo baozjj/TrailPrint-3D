@@ -13,7 +13,10 @@ import {
 } from "@/utils/terrain-mesh-three";
 import { fetchSatelliteTextureForCrop } from "@/utils/satellite-imagery";
 import { useConfigStore } from "@/stores/config";
-import { terrainMeshQualitySpec } from "@shared/utils/terrain-mesh-quality";
+import {
+  terrainMeshQualitySpec,
+  trailPreviewTubeSegments,
+} from "@shared/utils/terrain-mesh-quality";
 import { storeToRefs } from "pinia";
 
 const configStore = useConfigStore();
@@ -159,11 +162,16 @@ async function rebuildScene(): Promise<void> {
   const trailWidth = r.trailDisplayWidthMm ?? 4;
 
   if (polyline.length >= 2) {
+    const tubeSegs = trailPreviewTubeSegments(
+      polyline.length,
+      config.value.terrain.meshQuality,
+    );
     const tubeGeo = buildTrailTubeGeometry(
       polyline,
       preview,
       r.crop,
       trailWidth,
+      tubeSegs,
     );
     if (tubeGeo) {
       const tube = new THREE.Mesh(tubeGeo, trailMaterial);

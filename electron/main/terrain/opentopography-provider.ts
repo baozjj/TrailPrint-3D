@@ -93,6 +93,7 @@ async function downloadGeotiff(
   demtype: OpenTopoDemType,
   bbox: OtBbox,
   apiKey: string,
+  timeoutMs = FETCH_TIMEOUT_MS,
 ): Promise<ArrayBuffer> {
   const url = new URL(OT_API);
   url.searchParams.set("demtype", demtype);
@@ -104,7 +105,7 @@ async function downloadGeotiff(
   url.searchParams.set("API_Key", apiKey);
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(url.toString(), { signal: controller.signal });
     const contentType = res.headers.get("content-type") ?? "";
@@ -147,6 +148,7 @@ async function loadSampler(
   demtype: OpenTopoDemType,
   bbox: OtBbox,
   apiKey: string,
+  fetchTimeoutMs = FETCH_TIMEOUT_MS,
 ): Promise<GeotiffSampler> {
   await mkdir(cacheDir(), { recursive: true });
   const path = cacheFilePath(demtype, bbox);
@@ -157,7 +159,7 @@ async function loadSampler(
 
   let buffer = await readCached(path);
   if (!buffer) {
-    buffer = await downloadGeotiff(demtype, bbox, apiKey);
+    buffer = await downloadGeotiff(demtype, bbox, apiKey, fetchTimeoutMs);
     await writeFile(path, Buffer.from(buffer));
   }
 
@@ -172,11 +174,17 @@ export async function sampleElevationsOpenTopography(
   apiKey: string,
   lats: number[],
   lons: number[],
+  options?: { fetchTimeoutMs?: number },
 ): Promise<Float64Array> {
   const key = resolveOpenTopoApiKey(apiKey);
 
   const bbox = padBbox(crop);
-  const sampler = await loadSampler(demtype, bbox, key);
+  const sampler = await loadSampler(
+    demtype,
+    bbox,
+    key,
+    options?.fetchTimeoutMs,
+  );
   const out = new Float64Array(lats.length);
 
   for (let i = 0; i < lats.length; i++) {
