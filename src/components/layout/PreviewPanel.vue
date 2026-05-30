@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
@@ -22,62 +22,56 @@ const mapRef = ref<InstanceType<typeof MapLeafletView> | null>(null);
 const surfaceRef = ref<HTMLElement | null>(null);
 const viewport = ref({ w: 800, h: 600 });
 
+function syncViewportToStore(): void {
+  ui.previewViewport = { ...viewport.value };
+}
+
 const terrainGen = useTerrainGeneration(viewport);
 const trayGen = useTrayGeneration();
 
-const generating = computed(
-  () => terrainGen.generating.value || trayGen.generating.value,
+const generating = computed(() =>
+  previewMode.value === "3d"
+    ? terrainGen.generating.value
+    : terrainGen.generating.value || trayGen.generating.value,
 );
-const previewError = computed(
-  () => terrainGen.error.value || trayGen.error.value,
+const previewError = computed(() =>
+  previewMode.value === "3d"
+    ? terrainGen.error.value
+    : terrainGen.error.value || trayGen.error.value,
 );
-const { mesh, trailMesh, lastResult } = terrainGen;
-const { mesh: trayMesh } = trayGen;
+const { regenerate: regenerateTerrain } = terrainGen;
+const { regenerate: regenerateTray } = trayGen;
 
-const demLabel = computed(() => {
-  if (!lastResult.value) return "";
-  const src =
-    lastResult.value.demSource === "open-meteo" ? "Open-Meteo" : "合成";
-  return `${src} · ${lastResult.value.generationMs}ms`;
-});
-
-const assemblyLabel = computed(() => {
-  const a = config.value.assembly;
-  const parts = [
-    `轨迹槽 +${a.trailToleranceMm}mm`,
-    `底座槽 +${a.trayToleranceMm}mm`,
-  ];
-  if (a.magnet.enabled) {
-    const holes: string[] = [];
-    if (a.magnet.snapFitHole) holes.push("拼接孔");
-    if (a.magnet.fridgeMagnetHole) holes.push("冰箱贴孔");
-    parts.push(
-      holes.length
-        ? `磁铁 Ø${a.magnet.diameterMm}×${a.magnet.thicknessMm}mm（${holes.join("、")}）`
-        : `磁铁 Ø${a.magnet.diameterMm}×${a.magnet.thicknessMm}mm`,
-    );
-  }
-  return parts.join(" · ");
-});
+/** 顶层 Ref，模板才能自动解包 */
+const terrainResult = toRef(terrainGen, "lastResult");
 
 let resizeObserver: ResizeObserver | null = null;
+
+function syncPreviewViewport(): void {
+  const el = surfaceRef.value;
+  if (!el) return;
+  viewport.value = {
+    w: el.clientWidth,
+    h: el.clientHeight,
+  };
+  syncViewportToStore();
+}
+
+let unregisterPrepareExport: (() => void) | null = null;
 
 onMounted(() => {
   const el = surfaceRef.value;
   if (!el) return;
-  const sync = () => {
-    viewport.value = {
-      w: el.clientWidth,
-      h: el.clientHeight,
-    };
-  };
-  sync();
-  resizeObserver = new ResizeObserver(sync);
+  syncPreviewViewport();
+  resizeObserver = new ResizeObserver(syncPreviewViewport);
   resizeObserver.observe(el);
+  unregisterPrepareExport = ui.registerPrepareExportHook(syncPreviewViewport);
 });
 
 onUnmounted(() => {
   resizeObserver?.disconnect();
+  unregisterPrepareExport?.();
+  unregisterPrepareExport = null;
 });
 
 const viewOptions: { value: PreviewMode; label: string }[] = [
@@ -86,6 +80,38 @@ const viewOptions: { value: PreviewMode; label: string }[] = [
 ];
 
 const show2dMap = computed(() => previewMode.value === "2d");
+
+function scheduleMapFit(): void {
+  requestAnimationFrame(() => {
+    mapRef.value?.fitTrackInView();
+    setTimeout(() => mapRef.value?.fitTrackInView(), 120);
+  });
+}
+
+watch(show2dMap, async (show) => {
+  if (!show) return;
+  syncPreviewViewport();
+  await nextTick();
+  syncPreviewViewport();
+  if (config.value.gpx.imported) scheduleMapFit();
+});
+
+watch(
+  () => ui.gpxMapFitNonce,
+  async () => {
+    if (!show2dMap.value || !config.value.gpx.imported) return;
+    await nextTick();
+    scheduleMapFit();
+  },
+);
+
+watch(previewMode, async (mode) => {
+  if (mode !== "3d") return;
+  syncPreviewViewport();
+  await nextTick();
+  syncPreviewViewport();
+  void regenerateTerrain();
+});
 
 function onDragOver(e: DragEvent): void {
   e.preventDefault();
@@ -104,7 +130,8 @@ async function onDrop(e: DragEvent): Promise<void> {
     const ok = await importFromFile(file);
     if (ok) {
       previewMode.value = "2d";
-      setTimeout(() => mapRef.value?.fitTrackInView(), 100);
+      await nextTick();
+      scheduleMapFit();
     }
   }
 }
@@ -123,21 +150,17 @@ async function onDrop(e: DragEvent): Promise<void> {
 
       <TerrainMeshPreview
         v-if="previewMode === '3d'"
-        :mesh="mesh"
-        :trail-mesh="trailMesh"
-        :tray-mesh="trayMesh"
+        class="preview__terrain-3d"
+        :result="terrainResult"
         :generating="generating"
         :error="previewError"
-        :dem-label="mesh || trayMesh ? demLabel : undefined"
-        :assembly-label="mesh || trayMesh ? assemblyLabel : undefined"
       />
 
       <div
         v-if="
           (show2dMap && !config.gpx.imported) ||
           (previewMode === '3d' &&
-            !mesh &&
-            !trayMesh &&
+            !terrainResult &&
             !generating &&
             !previewError)
         "
@@ -171,7 +194,7 @@ async function onDrop(e: DragEvent): Promise<void> {
             importing
               ? "正在解析轨迹…"
               : previewMode === "3d"
-                ? "调整左侧地形参数后将自动生成 3D 预览"
+                ? "将显示 2D 白框内的山体 3D 模型（不含托盘底座）"
                 : "拖动 GPX 到此处 · 或点击左侧「导入 GPX」"
           }}
         </p>
@@ -218,6 +241,12 @@ async function onDrop(e: DragEvent): Promise<void> {
   min-height: 0;
   position: relative;
   background: #1a1a2e;
+}
+
+.preview__terrain-3d {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
 }
 
 .preview__placeholder {

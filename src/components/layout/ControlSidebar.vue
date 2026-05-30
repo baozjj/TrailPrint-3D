@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useUiStore } from '@/stores/ui'
 import { useConfigStore } from '@/stores/config'
 import { useGpxImport } from '@/composables/useGpxImport'
-import { formatIpcError, ipcEnqueueTask } from '@/ipc/client'
+import { formatIpcError, ipcGenerateExport, ipcOnExportProgress, ipcRevealExport } from '@/ipc/client'
 import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
+import { physicalFootprintMm } from '@shared/utils/crop-region'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
@@ -15,7 +16,36 @@ import AssemblySection from '@/components/sections/AssemblySection.vue'
 
 const ui = useUiStore()
 const configStore = useConfigStore()
-const { generating, statusMessage } = storeToRefs(ui)
+const { generating, statusMessage, exportProgress, lastExportZipPath } = storeToRefs(ui)
+
+function exportFileName(path: string): string {
+  const parts = path.split(/[/\\]/)
+  return parts[parts.length - 1] ?? path
+}
+
+async function revealLastExport(): Promise<void> {
+  const path = lastExportZipPath.value
+  if (!path) return
+  try {
+    await ipcRevealExport(path)
+  } catch (err) {
+    statusMessage.value = formatIpcError(err)
+  }
+}
+
+let unsubscribeExportProgress: (() => void) | null = null
+
+onMounted(() => {
+  unsubscribeExportProgress = ipcOnExportProgress((progress) => {
+    ui.exportProgress = progress.progress
+    statusMessage.value = progress.message
+  })
+})
+
+onUnmounted(() => {
+  unsubscribeExportProgress?.()
+  unsubscribeExportProgress = null
+})
 const { importing, importFromFile } = useGpxImport()
 
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -45,17 +75,34 @@ async function handleGenerate(): Promise<void> {
     return
   }
   generating.value = true
-  statusMessage.value = null
+  ui.exportProgress = 0
+  statusMessage.value = '准备生成…'
+  ui.runPrepareExport()
+  const { w, h } = ui.previewViewport
   try {
-    await ipcEnqueueTask({
-      kind: 'zip-pack',
-      payload: configStore.toSnapshot() as unknown as Record<string, unknown>
+    const res = await ipcGenerateExport({
+      config: configStore.toSnapshot(),
+      viewportWidth: Math.round(w),
+      viewportHeight: Math.round(h),
     })
-    statusMessage.value = '生成任务已提交（STL/ZIP 逻辑待任务-07 接入）'
+    if (res.cancelled) {
+      statusMessage.value =
+        '未生成文件：已在保存对话框中取消。再次点击按钮并选择保存位置即可。'
+    } else if (res.savedPath) {
+      ui.lastExportZipPath = res.savedPath
+      const name = exportFileName(res.savedPath)
+      const foot = physicalFootprintMm(configStore.config.mapCrop)
+      const sizeHint =
+        configStore.config.mapCrop.shape === 'circle'
+          ? `直径 ${(foot.radiusMm ?? 0) * 2}mm`
+          : `${foot.widthMm}×${foot.heightMm}mm`
+      statusMessage.value = `已保存 ${name}（打印区域 ${sizeHint}，${Math.round(res.generationMs / 1000)} 秒）`
+    }
   } catch (err) {
     statusMessage.value = formatIpcError(err)
   } finally {
     generating.value = false
+    ui.exportProgress = 0
   }
 }
 </script>
@@ -102,7 +149,29 @@ async function handleGenerate(): Promise<void> {
     </div>
 
     <footer class="sidebar__footer">
-      <p v-if="statusMessage" class="sidebar__status">{{ statusMessage }}</p>
+      <div
+        v-if="lastExportZipPath && !generating"
+        class="sidebar__export-done"
+      >
+        <p class="sidebar__export-label">上次导出</p>
+        <p class="sidebar__export-path" :title="lastExportZipPath">
+          {{ exportFileName(lastExportZipPath) }}
+        </p>
+        <p class="sidebar__export-hint">{{ lastExportZipPath }}</p>
+        <button
+          type="button"
+          class="sidebar__reveal"
+          @click="revealLastExport"
+        >
+          在 Finder 中显示
+        </button>
+      </div>
+      <p v-if="statusMessage" class="sidebar__status">
+        <template v-if="generating && exportProgress > 0">
+          {{ Math.round(exportProgress * 100) }}% ·
+        </template>
+        {{ statusMessage }}
+      </p>
       <button
         type="button"
         class="sidebar__cta"
@@ -204,6 +273,54 @@ async function handleGenerate(): Promise<void> {
   padding: 12px 20px 20px;
   background: var(--tp-bg-footer);
   border-top: 1px solid var(--tp-border);
+}
+
+.sidebar__export-done {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--tp-bg-input);
+  border: 1px solid var(--tp-border);
+}
+
+.sidebar__export-label {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--tp-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.sidebar__export-path {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  word-break: break-all;
+}
+
+.sidebar__export-hint {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  color: var(--tp-text-secondary);
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.sidebar__reveal {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--tp-bg-panel);
+  border: 1px solid var(--tp-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tp-text-accent);
+}
+
+.sidebar__reveal:hover {
+  background: var(--tp-bg-footer);
 }
 
 .sidebar__status {

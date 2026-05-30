@@ -22,7 +22,10 @@ export function buildTrailLineMesh(
   const { polylineMm, widthMm, depthMm, heightMm, cols, rows, crop } = opts;
   if (polylineMm.length < 2 || widthMm <= 0 || depthMm <= 0) return null;
 
-  const path = resamplePolyline(polylineMm, Math.max(0.8, widthMm / 3));
+  let path = resamplePolyline(polylineMm, Math.max(0.8, widthMm / 3));
+  if (path.length < 2 && polylineMm.length >= 2) {
+    path = polylineMm;
+  }
   if (path.length < 2) return null;
 
   const samples: Array<{ x: number; y: number; zTop: number; zBot: number }> =

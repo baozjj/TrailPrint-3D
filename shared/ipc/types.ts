@@ -85,3 +85,8 @@ export type {
   TrayGenerateRequest,
   TrayGenerateResponse
 } from '@shared/types/tray'
+export type {
+  ExportGenerateRequest,
+  ExportGenerateResponse,
+  ExportProgress
+} from '@shared/types/export'

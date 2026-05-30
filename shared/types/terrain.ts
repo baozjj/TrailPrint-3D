@@ -19,7 +19,17 @@ export interface TerrainCropRegion {
   polygonSides?: number;
 }
 
-/** 轻量网格载荷（IPC 传回渲染进程预览） */
+/** 3D 预览专用：规则高度场，渲染进程本地重建山体 */
+export interface TerrainHeightPreview {
+  cols: number;
+  rows: number;
+  /** 行优先地表高度 (mm)，已含挖槽 */
+  heights: number[];
+  minSurfaceZ: number;
+  bottomZ: number;
+  baseThicknessMm: number;
+}
+
 export interface TerrainMeshPayload {
   /** 顶点坐标 [x0,y0,z0, x1,y1,z1, ...] 单位 mm，原点在模型中心、Z 向上 */
   positions: number[];
@@ -50,15 +60,26 @@ export interface TerrainGenerateRequest {
   viewportHeight: number;
   /** 可选：任务-04 传入时执行挖槽（当前为占位直通） */
   trailGroove?: TrailGrooveSpec;
+  /**
+   * Trail_Line 实体宽度 (mm)。未指定时使用 config.trail.trailWidthMm。
+   * STL 导出时应传入「轨迹宽度 − 2×装配公差」以适配凹槽。
+   */
+  trailLineWidthMm?: number;
 }
 
 export interface TerrainGenerateResponse {
   crop: TerrainCropRegion;
   mesh: TerrainMeshPayload;
+  /** 规则高度场，供 3D 预览可靠重建山体 */
+  heightPreview: TerrainHeightPreview;
   /** Trail_Line 可打印实体；无 GPX 或点数不足时为 null */
   trailMesh: TerrainMeshPayload | null;
-  /** DEM 来源说明 */
-  demSource: "open-meteo" | "synthetic";
+  /** 3D 预览：模型平面轨迹折线 (mm) */
+  trailPolylineMm: Array<{ x: number; y: number }>;
+  /** 3D 预览：轨迹显示宽度 (mm) */
+  trailDisplayWidthMm: number;
+  /** DEM 数据来源（OpenTopography 栅格） */
+  demSource: "opentopography";
   generationMs: number;
 }
 

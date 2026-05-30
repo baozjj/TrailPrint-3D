@@ -17,7 +17,13 @@ export const IpcChannels = {
   /** 主进程 → 渲染进程：地形生成进度 */
   TERRAIN_PROGRESS: 'terrain:progress',
   /** 生成 Tray_Base 托盘网格（主进程） */
-  TRAY_GENERATE: 'tray:generate'
+  TRAY_GENERATE: 'tray:generate',
+  /** 生成三件套 STL 并打包 ZIP（主进程，含保存对话框） */
+  EXPORT_GENERATE: 'export:generate',
+  /** 主进程 → 渲染进程：导出进度 */
+  EXPORT_PROGRESS: 'export:progress',
+  /** 在文件管理器中显示已导出的 ZIP */
+  EXPORT_REVEAL: 'export:reveal'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

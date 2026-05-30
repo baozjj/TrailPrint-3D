@@ -1,319 +1,224 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
-import type { TerrainMeshPayload } from "@shared/types/terrain";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { TerrainGenerateResponse } from "@shared/types/terrain";
+import {
+  buildTerrainGeometryFromPreview,
+  buildTrailTubeGeometry,
+  disposeMeshGeometries,
+  fitCameraToTerrain,
+  payloadToBufferGeometry,
+} from "@/utils/terrain-mesh-three";
 
 const props = defineProps<{
-  mesh: TerrainMeshPayload | null;
-  trailMesh?: TerrainMeshPayload | null;
-  trayMesh?: TerrainMeshPayload | null;
+  result: TerrainGenerateResponse | null;
   generating?: boolean;
   error?: string | null;
-  demLabel?: string;
-  assemblyLabel?: string;
 }>();
 
-const canvasRef = ref<HTMLCanvasElement | null>(null);
-let gl: WebGLRenderingContext | null = null;
-let program: WebGLProgram | null = null;
-let terrainPosBuf: WebGLBuffer | null = null;
-let terrainIdxBuf: WebGLBuffer | null = null;
-let trailPosBuf: WebGLBuffer | null = null;
-let trailIdxBuf: WebGLBuffer | null = null;
-let trayPosBuf: WebGLBuffer | null = null;
-let trayIdxBuf: WebGLBuffer | null = null;
-let terrainIndexCount = 0;
-let trailIndexCount = 0;
-let trayIndexCount = 0;
-let terrainUint32 = false;
-let trailUint32 = false;
-let trayUint32 = false;
-let raf = 0;
-let angle = 0.6;
+const containerRef = ref<HTMLDivElement | null>(null);
+const statusHint = ref<string | null>(null);
 
-function initGl(canvas: HTMLCanvasElement): boolean {
-  gl = (canvas.getContext("webgl", { antialias: true }) ||
-    canvas.getContext("experimental-webgl")) as WebGLRenderingContext | null;
-  if (!gl) return false;
+let renderer: THREE.WebGLRenderer | null = null;
+let scene: THREE.Scene | null = null;
+let camera: THREE.PerspectiveCamera | null = null;
+let controls: OrbitControls | null = null;
+let terrainRoot: THREE.Group | null = null;
+let overlayRoot: THREE.Group | null = null;
+let animationId = 0;
+let resizeObserver: ResizeObserver | null = null;
 
-  const vs = `
-    attribute vec3 aPosition;
-    uniform mat4 uMatrix;
-    varying float vHeight;
-    void main() {
-      vHeight = aPosition.z;
-      gl_Position = uMatrix * vec4(aPosition, 1.0);
-    }
-  `;
-  const fs = `
-    precision mediump float;
-    uniform float uMeshKind;
-    varying float vHeight;
-    void main() {
-      if (uMeshKind > 1.5) {
-        gl_FragColor = vec4(0.45, 0.48, 0.55, 1.0);
-        return;
-      }
-      if (uMeshKind > 0.5) {
-        gl_FragColor = vec4(0.91, 0.26, 0.21, 1.0);
-        return;
-      }
-      float t = clamp((vHeight + 8.0) / 40.0, 0.0, 1.0);
-      vec3 low = vec3(0.25, 0.45, 0.28);
-      vec3 high = vec3(0.85, 0.78, 0.55);
-      gl_FragColor = vec4(mix(low, high, t), 1.0);
-    }
-  `;
+const terrainMaterial = new THREE.MeshLambertMaterial({
+  color: 0xffffff,
+  vertexColors: true,
+  side: THREE.DoubleSide,
+});
 
-  function compile(type: number, src: string): WebGLShader {
-    const sh = gl!.createShader(type)!;
-    gl!.shaderSource(sh, src);
-    gl!.compileShader(sh);
-    return sh;
-  }
+/** 预览轨迹：不受光照影响，避免被山体颜色淹没 */
+const trailMaterial = new THREE.MeshBasicMaterial({
+  color: 0xe84335,
+  depthTest: true,
+  depthWrite: true,
+});
 
-  const vsh = compile(gl.VERTEX_SHADER, vs);
-  const fsh = compile(gl.FRAGMENT_SHADER, fs);
-  program = gl.createProgram()!;
-  gl.attachShader(program, vsh);
-  gl.attachShader(program, fsh);
-  gl.linkProgram(program);
+const demLabel = computed(() => {
+  const r = props.result;
+  if (!r) return "";
+  const grid = r.heightPreview
+    ? `${r.heightPreview.cols}×${r.heightPreview.rows}`
+    : "";
+  return `OpenTopography · ${grid} · ${r.generationMs}ms`;
+});
 
-  terrainPosBuf = gl.createBuffer();
-  terrainIdxBuf = gl.createBuffer();
-  trailPosBuf = gl.createBuffer();
-  trailIdxBuf = gl.createBuffer();
-  trayPosBuf = gl.createBuffer();
-  trayIdxBuf = gl.createBuffer();
-  return true;
-}
+function rebuildScene(): void {
+  if (!terrainRoot || !overlayRoot || !camera || !controls) return;
 
-function perspective(
-  fovy: number,
-  aspect: number,
-  near: number,
-  far: number,
-): Float32Array {
-  const f = 1 / Math.tan(fovy / 2);
-  const nf = 1 / (near - far);
-  const out = new Float32Array(16);
-  out[0] = f / aspect;
-  out[5] = f;
-  out[10] = (far + near) * nf;
-  out[11] = -1;
-  out[14] = 2 * far * near * nf;
-  return out;
-}
+  disposeMeshGeometries(terrainRoot);
+  disposeMeshGeometries(overlayRoot);
+  terrainRoot.clear();
+  overlayRoot.clear();
+  statusHint.value = null;
 
-function multiply(a: Float32Array, b: Float32Array): Float32Array {
-  const out = new Float32Array(16);
-  for (let i = 0; i < 4; i++) {
-    for (let j = 0; j < 4; j++) {
-      out[i * 4 + j] =
-        a[i * 4] * b[j] +
-        a[i * 4 + 1] * b[4 + j] +
-        a[i * 4 + 2] * b[8 + j] +
-        a[i * 4 + 3] * b[12 + j];
-    }
-  }
-  return out;
-}
+  const r = props.result;
+  if (!r?.heightPreview || !r.crop) return;
 
-function rotateY(a: number): Float32Array {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const out = new Float32Array(16);
-  out[0] = c;
-  out[2] = s;
-  out[5] = 1;
-  out[8] = -s;
-  out[10] = c;
-  out[15] = 1;
-  return out;
-}
-
-function rotateX(a: number): Float32Array {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const out = new Float32Array(16);
-  out[0] = 1;
-  out[5] = c;
-  out[6] = -s;
-  out[9] = s;
-  out[10] = c;
-  out[15] = 1;
-  return out;
-}
-
-function bindMesh(
-  mesh: TerrainMeshPayload,
-  posBuf: WebGLBuffer,
-  idxBuf: WebGLBuffer,
-): { count: number; uint32: boolean } {
-  if (!gl || !program) return { count: 0, uint32: false };
-
-  const pos = new Float32Array(mesh.positions);
-  const maxIndex = mesh.indices.reduce((m, v) => Math.max(m, v), 0);
-  const uint32 = maxIndex > 65535;
-  const idx = uint32
-    ? new Uint32Array(mesh.indices)
-    : new Uint16Array(mesh.indices);
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, posBuf);
-  gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(program, "aPosition");
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 3, gl.FLOAT, false, 0, 0);
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, idxBuf);
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
-  return { count: idx.length, uint32 };
-}
-
-function drawElements(count: number, uint32: boolean): void {
-  if (!gl || count === 0) return;
-  if (uint32) {
-    const ext = gl.getExtension("OES_element_index_uint");
-    if (ext) gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_INT, 0);
-  } else {
-    gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
-  }
-}
-
-function syncMeshes(): void {
-  if (!gl || !program) return;
-  gl.useProgram(program);
-
-  if (props.mesh) {
-    const t = bindMesh(props.mesh, terrainPosBuf!, terrainIdxBuf!);
-    terrainIndexCount = t.count;
-    terrainUint32 = t.uint32;
-  } else {
-    terrainIndexCount = 0;
-  }
-
-  if (props.trailMesh) {
-    const t = bindMesh(props.trailMesh, trailPosBuf!, trailIdxBuf!);
-    trailIndexCount = t.count;
-    trailUint32 = t.uint32;
-  } else {
-    trailIndexCount = 0;
-  }
-
-  if (props.trayMesh) {
-    const t = bindMesh(props.trayMesh, trayPosBuf!, trayIdxBuf!);
-    trayIndexCount = t.count;
-    trayUint32 = t.uint32;
-  } else {
-    trayIndexCount = 0;
-  }
-}
-
-function draw(): void {
-  const canvas = canvasRef.value;
-  if (!gl || !program || !canvas) return;
-  if (
-    terrainIndexCount === 0 &&
-    trailIndexCount === 0 &&
-    trayIndexCount === 0
-  ) {
-    raf = requestAnimationFrame(draw);
+  const preview = r.heightPreview;
+  if (preview.heights.length < preview.cols * preview.rows) {
+    statusHint.value = "高度场数据不完整";
     return;
   }
 
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
-  if (
-    canvas.width !== Math.floor(w * dpr) ||
-    canvas.height !== Math.floor(h * dpr)
-  ) {
-    canvas.width = Math.floor(w * dpr);
-    canvas.height = Math.floor(h * dpr);
-    gl.viewport(0, 0, canvas.width, canvas.height);
+  const terrainGeo = buildTerrainGeometryFromPreview(r.crop, preview);
+  if (!terrainGeo.getIndex()?.count) {
+    statusHint.value = "山体网格为空";
+    terrainGeo.dispose();
+    return;
   }
 
-  gl.clearColor(0.1, 0.11, 0.18, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.enable(gl.DEPTH_TEST);
+  const terrainMesh = new THREE.Mesh(terrainGeo, terrainMaterial);
+  terrainMesh.frustumCulled = false;
+  terrainMesh.renderOrder = 0;
+  terrainRoot.add(terrainMesh);
 
-  angle += 0.004;
-  const aspect = w / Math.max(h, 1);
-  const proj = perspective(0.9, aspect, 1, 800);
-  const view = multiply(
-    rotateX(0.55),
-    multiply(
-      rotateY(angle),
-      new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, -15, -120, 1]),
-    ),
-  );
-  const mvp = multiply(proj, view);
-  gl.uniformMatrix4fv(gl.getUniformLocation(program, "uMatrix"), false, mvp);
+  const polyline = r.trailPolylineMm ?? [];
+  const trailWidth = r.trailDisplayWidthMm ?? 4;
 
-  const uKind = gl.getUniformLocation(program, "uMeshKind");
-
-  if (trayIndexCount > 0 && trayPosBuf && trayIdxBuf && props.trayMesh) {
-    gl.uniform1f(uKind, 2);
-    bindMesh(props.trayMesh, trayPosBuf, trayIdxBuf);
-    drawElements(trayIndexCount, trayUint32);
+  if (polyline.length >= 2) {
+    const tubeGeo = buildTrailTubeGeometry(
+      polyline,
+      preview,
+      r.crop,
+      trailWidth,
+    );
+    if (tubeGeo) {
+      const tube = new THREE.Mesh(tubeGeo, trailMaterial);
+      tube.frustumCulled = false;
+      tube.renderOrder = 2;
+      overlayRoot.add(tube);
+    } else if (r.trailMesh?.positions?.length && r.trailMesh.indices?.length) {
+      const trailGeo = payloadToBufferGeometry(r.trailMesh);
+      const pos = trailGeo.getAttribute("position") as THREE.BufferAttribute;
+      for (let vi = 0; vi < pos.count; vi++) {
+        pos.setZ(vi, pos.getZ(vi) + 0.35);
+      }
+      pos.needsUpdate = true;
+      trailGeo.computeVertexNormals();
+      const trail = new THREE.Mesh(trailGeo, trailMaterial);
+      trail.frustumCulled = false;
+      trail.renderOrder = 2;
+      overlayRoot.add(trail);
+    }
+  } else if (r.trailMesh?.positions?.length) {
+    statusHint.value = "轨迹折线为空，请检查 GPX 是否在白框内";
   }
 
-  if (terrainIndexCount > 0 && terrainPosBuf && terrainIdxBuf && props.mesh) {
-    gl.uniform1f(uKind, 0);
-    bindMesh(props.mesh, terrainPosBuf, terrainIdxBuf);
-    drawElements(terrainIndexCount, terrainUint32);
-  }
-
-  if (trailIndexCount > 0 && trailPosBuf && trailIdxBuf && props.trailMesh) {
-    gl.uniform1f(uKind, 1);
-    bindMesh(props.trailMesh, trailPosBuf, trailIdxBuf);
-    drawElements(trailIndexCount, trailUint32);
-  }
-
-  raf = requestAnimationFrame(draw);
+  fitCameraToTerrain(camera, controls, terrainMesh, overlayRoot);
 }
 
 function resize(): void {
-  const canvas = canvasRef.value;
-  if (!canvas || !gl) return;
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.floor(canvas.clientWidth * dpr);
-  canvas.height = Math.floor(canvas.clientHeight * dpr);
-  gl.viewport(0, 0, canvas.width, canvas.height);
+  const el = containerRef.value;
+  if (!el || !renderer || !camera) return;
+  const w = el.clientWidth;
+  const h = el.clientHeight;
+  if (w < 8 || h < 8) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+function animate(): void {
+  animationId = requestAnimationFrame(animate);
+  controls?.update();
+  if (renderer && scene && camera) {
+    renderer.render(scene, camera);
+  }
+}
+
+function initThree(container: HTMLDivElement): void {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1c2e);
+
+  camera = new THREE.PerspectiveCamera(38, 1, 0.1, 500000);
+  camera.up.set(0, 0, 1);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  container.appendChild(renderer.domElement);
+
+  terrainRoot = new THREE.Group();
+  overlayRoot = new THREE.Group();
+  scene.add(terrainRoot);
+  scene.add(overlayRoot);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.05));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+  sun.position.set(80, 60, 140);
+  scene.add(sun);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.35;
+  controls.minPolarAngle = 0.2;
+  controls.maxPolarAngle = Math.PI / 2 - 0.12;
+
+  resize();
+  rebuildScene();
+  animate();
+
+  resizeObserver = new ResizeObserver(resize);
+  resizeObserver.observe(container);
+}
+
+function disposeThree(): void {
+  cancelAnimationFrame(animationId);
+  animationId = 0;
+  resizeObserver?.disconnect();
+  resizeObserver = null;
+  controls?.dispose();
+  controls = null;
+  if (terrainRoot) {
+    disposeMeshGeometries(terrainRoot);
+    terrainRoot.clear();
+  }
+  if (overlayRoot) {
+    disposeMeshGeometries(overlayRoot);
+    overlayRoot.clear();
+  }
+  terrainRoot = null;
+  overlayRoot = null;
+  terrainMaterial.dispose();
+  trailMaterial.dispose();
+  renderer?.dispose();
+  renderer?.domElement.remove();
+  renderer = null;
+  scene = null;
+  camera = null;
 }
 
 watch(
-  () => [props.mesh, props.trailMesh, props.trayMesh],
-  () => {
-    syncMeshes();
-    if (!raf) raf = requestAnimationFrame(draw);
-  },
-  { immediate: true, deep: true },
+  () => props.result,
+  () => rebuildScene(),
+  { deep: true },
 );
 
-let ro: ResizeObserver | null = null;
-
 onMounted(() => {
-  const canvas = canvasRef.value;
-  if (!canvas || !initGl(canvas)) return;
-  resize();
-  syncMeshes();
-  raf = requestAnimationFrame(draw);
-  ro = new ResizeObserver(resize);
-  ro.observe(canvas);
+  const el = containerRef.value;
+  if (el) initThree(el);
 });
 
 onUnmounted(() => {
-  cancelAnimationFrame(raf);
-  ro?.disconnect();
-  gl = null;
+  disposeThree();
 });
 </script>
 
 <template>
   <div class="terrain-preview">
-    <canvas ref="canvasRef" class="terrain-preview__canvas" />
+    <div ref="containerRef" class="terrain-preview__viewport" />
     <div v-if="generating" class="terrain-preview__badge">
-      正在生成 3D 模型…
+      正在生成山体 3D 模型…
     </div>
     <div
       v-else-if="error"
@@ -322,13 +227,20 @@ onUnmounted(() => {
       {{ error }}
     </div>
     <div
+      v-else-if="statusHint"
+      class="terrain-preview__badge terrain-preview__badge--err"
+    >
+      {{ statusHint }}
+    </div>
+    <div v-else-if="!result" class="terrain-preview__badge">
+      导入 GPX 后将自动生成白框内山体预览
+    </div>
+    <div
       v-else-if="demLabel"
       class="terrain-preview__badge terrain-preview__badge--dim"
     >
       {{ demLabel }}
-      <span v-if="trailMesh"> · 红=轨迹</span>
-      <span v-if="trayMesh"> · 灰=托盘</span>
-      <span v-if="assemblyLabel"> · {{ assemblyLabel }}</span>
+      <span> · 绿=山体 · 红=轨迹 · 拖动旋转</span>
     </div>
   </div>
 </template>
@@ -340,10 +252,15 @@ onUnmounted(() => {
   z-index: 2;
 }
 
-.terrain-preview__canvas {
+.terrain-preview__viewport {
   width: 100%;
   height: 100%;
+}
+
+.terrain-preview__viewport :deep(canvas) {
   display: block;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 .terrain-preview__badge {
@@ -354,7 +271,7 @@ onUnmounted(() => {
   padding: 6px 12px;
   border-radius: 8px;
   font-size: 12px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   color: var(--tp-text-secondary);
   pointer-events: none;
   z-index: 3;
@@ -363,12 +280,12 @@ onUnmounted(() => {
 
 .terrain-preview__badge--err {
   color: #c62828;
-  max-width: 80%;
+  max-width: 85%;
   text-align: center;
   white-space: normal;
 }
 
 .terrain-preview__badge--dim {
-  opacity: 0.85;
+  opacity: 0.88;
 }
 </style>

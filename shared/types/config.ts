@@ -3,6 +3,8 @@
  * 渲染进程负责读写展示；重度计算在主进程读取同构快照。
  */
 
+import type { OpenTopoDemType } from "./dem";
+
 // ─── 模块一：地图选取与尺寸 ─────────────────────────────────────────
 
 export type BaseShape = "circle" | "rectangle" | "polygon";
@@ -33,6 +35,10 @@ export interface TerrainConfig {
   baseSolidThicknessMm: number;
   zExaggeration: number;
   smoothing: TerrainSmoothing;
+  /** OpenTopography 数据集，见 shared/types/dem.ts */
+  demDataset: OpenTopoDemType;
+  /** OpenTopography API Key（可由 .env 注入） */
+  openTopographyApiKey: string;
 }
 
 // ─── 模块三：轨迹模型 ─────────────────────────────────────────────────
@@ -106,6 +112,8 @@ export interface GpxBounds {
 export interface GpxState {
   imported: boolean;
   fileName?: string;
+  /** 本机 GPX 路径（Electron 导入时有值，供主进程导出时重新读取） */
+  filePath?: string;
   trackName?: string;
   /** 当前生效轨迹（任务-04 优化后可能替换） */
   points: GpxPoint[];
@@ -154,6 +162,8 @@ export function createDefaultConfig(): AppConfig {
       baseSolidThicknessMm: 3,
       zExaggeration: 2,
       smoothing: "light",
+      demDataset: "COP30",
+      openTopographyApiKey: "",
     },
     trail: {
       gpxSimplify: false,

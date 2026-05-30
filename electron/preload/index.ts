@@ -12,19 +12,49 @@ import type {
   TerrainGenerateRequest,
   TerrainGenerateResponse,
   TrayGenerateRequest,
-  TrayGenerateResponse
+  TrayGenerateResponse,
+  ExportGenerateRequest,
+  ExportGenerateResponse,
+  ExportProgress
 } from '@shared/ipc/types'
-import { isIpcError } from '@shared/ipc/types'
+import { isIpcError, type IpcError } from '@shared/ipc/types'
+
+function invokeErrorMessage(err: unknown): string {
+  if (isIpcError(err)) {
+    return err.message
+  }
+  if (err instanceof Error) {
+    const m = err.message
+    const stripped = m.replace(
+      /^Error invoking remote method '[^']+':\s*/,
+      '',
+    )
+    if (stripped === '[object Object]') {
+      return '操作失败，请重试'
+    }
+    if (stripped.startsWith('{')) {
+      try {
+        const parsed: unknown = JSON.parse(stripped)
+        if (isIpcError(parsed)) {
+          return parsed.message
+        }
+      } catch {
+        /* 非 JSON */
+      }
+    }
+    return stripped || m
+  }
+  return String(err)
+}
 
 async function invoke<T>(channel: string, payload?: unknown): Promise<T> {
   try {
     return (await ipcRenderer.invoke(channel, payload)) as T
   } catch (err) {
-    if (isIpcError(err)) {
-      throw err
-    }
-    const message = err instanceof Error ? err.message : String(err)
-    throw { code: 'IPC_INVOKE_FAILED', message }
+    throw {
+      code: 'IPC_INVOKE_FAILED',
+      message: invokeErrorMessage(err),
+    } satisfies IpcError
   }
 }
 
@@ -40,7 +70,20 @@ const api = {
   generateTerrain: (req: TerrainGenerateRequest) =>
     invoke<TerrainGenerateResponse>(IpcChannels.TERRAIN_GENERATE, req),
   generateTray: (req: TrayGenerateRequest) =>
-    invoke<TrayGenerateResponse>(IpcChannels.TRAY_GENERATE, req)
+    invoke<TrayGenerateResponse>(IpcChannels.TRAY_GENERATE, req),
+  generateExport: (req: ExportGenerateRequest) =>
+    invoke<ExportGenerateResponse>(IpcChannels.EXPORT_GENERATE, req),
+  revealExport: (zipPath: string) =>
+    invoke<{ ok: true }>(IpcChannels.EXPORT_REVEAL, zipPath),
+  onExportProgress: (callback: (progress: ExportProgress) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: ExportProgress) => {
+      callback(progress)
+    }
+    ipcRenderer.on(IpcChannels.EXPORT_PROGRESS, handler)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.EXPORT_PROGRESS, handler)
+    }
+  }
 }
 
 export type TrailPrintApi = typeof api

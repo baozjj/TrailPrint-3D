@@ -26,6 +26,14 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
     const { w, h } = viewport.value;
     if (w < 64 || h < 64) return;
 
+    if (!config.value.gpx.imported) {
+      mesh.value = null;
+      trailMesh.value = null;
+      lastResult.value = null;
+      error.value = null;
+      return;
+    }
+
     const id = ++requestId;
     generating.value = true;
     error.value = null;
@@ -63,6 +71,8 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
       config.value.terrain.baseSolidThicknessMm,
       config.value.terrain.zExaggeration,
       config.value.terrain.smoothing,
+      config.value.terrain.demDataset,
+      config.value.terrain.openTopographyApiKey,
       config.value.mapCrop.shape,
       config.value.mapCrop.radiusMm,
       config.value.mapCrop.lengthMm,
@@ -87,6 +97,7 @@ export function useTerrainGeneration(viewport: Ref<{ w: number; h: number }>) {
       viewport.value.h,
     ],
     () => scheduleGeneration(),
+    { immediate: true },
   );
 
   return {

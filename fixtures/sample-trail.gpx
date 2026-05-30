@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="TrailPrint-3D">
+  <trk>
+    <name>示例: 成都龙泉山</name>
+    <trkseg>
+      <trkpt lat="30.5580" lon="104.2750"><ele>620</ele></trkpt>
+      <trkpt lat="30.5588" lon="104.2765"><ele>635</ele></trkpt>
+      <trkpt lat="30.5595" lon="104.2780"><ele>648</ele></trkpt>
+      <trkpt lat="30.5602" lon="104.2795"><ele>662</ele></trkpt>
+      <trkpt lat="30.5610" lon="104.2810"><ele>675</ele></trkpt>
+      <trkpt lat="30.5618" lon="104.2825"><ele>688</ele></trkpt>
+      <trkpt lat="30.5625" lon="104.2840"><ele>702</ele></trkpt>
+      <trkpt lat="30.5632" lon="104.2855"><ele>715</ele></trkpt>
+      <trkpt lat="30.5640" lon="104.2870"><ele>728</ele></trkpt>
+      <trkpt lat="30.5648" lon="104.2885"><ele>740</ele></trkpt>
+      <trkpt lat="30.5655" lon="104.2900"><ele>752</ele></trkpt>
+      <trkpt lat="30.5662" lon="104.2915"><ele>765</ele></trkpt>
+      <trkpt lat="30.5670" lon="104.2930"><ele>778</ele></trkpt>
+      <trkpt lat="30.5678" lon="104.2945"><ele>790</ele></trkpt>
+      <trkpt lat="30.5685" lon="104.2960"><ele>802</ele></trkpt>
+      <trkpt lat="30.5692" lon="104.2975"><ele>815</ele></trkpt>
+      <trkpt lat="30.5700" lon="104.2990"><ele>828</ele></trkpt>
+      <trkpt lat="30.5708" lon="104.3005"><ele>840</ele></trkpt>
+      <trkpt lat="30.5715" lon="104.3020"><ele>852</ele></trkpt>
+      <trkpt lat="30.5722" lon="104.3035"><ele>865</ele></trkpt>
+      <trkpt lat="30.5730" lon="104.3050"><ele>878</ele></trkpt>
+    </trkseg>
+  </trk>
+</gpx>

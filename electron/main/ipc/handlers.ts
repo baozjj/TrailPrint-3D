@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { BrowserWindow, ipcMain } from 'electron'
 import { IpcChannels } from '@shared/ipc/channels'
 import { IpcException, type IpcError } from '@shared/ipc/types'
 import type {
@@ -12,6 +12,7 @@ import type {
   TaskStatusResponse
 } from '@shared/ipc/types'
 import { parseGpxFile } from '../gpx/parse-gpx'
+import { setGpxSessionCache } from '../gpx/gpx-session-cache'
 import { generateTerrainMain } from '../terrain/terrain-main-service'
 import { enqueueTask, listTasks } from '../task-queue'
 import type {
@@ -22,7 +23,12 @@ import type {
   TrayGenerateRequest,
   TrayGenerateResponse
 } from '@shared/types/tray'
+import type {
+  ExportGenerateRequest,
+  ExportGenerateResponse
+} from '@shared/types/export'
 import { generateTrayBase } from '../tray/tray-service'
+import { generateModelsZip, revealExportZip } from '../export/export-service'
 
 function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
   return async (_event: Electron.IpcMainInvokeEvent, req: Req): Promise<Res> => {
@@ -30,9 +36,13 @@ function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
       return await fn(req)
     } catch (err) {
       if (err instanceof IpcException) {
-        throw err.toJSON() satisfies IpcError
+        // 必须 throw Error：抛普通对象在渲染进程会变成 [object Object]
+        throw new Error(err.message)
       }
-      throw err
+      if (err instanceof Error) {
+        throw err
+      }
+      throw new Error(String(err))
     }
   }
 }
@@ -72,6 +82,7 @@ export function registerIpcHandlers(): void {
     IpcChannels.GPX_PARSE,
     wrapHandler(async (req: GpxParseRequest): Promise<GpxParseResponse> => {
       const result = await parseGpxFile(req)
+      setGpxSessionCache(result)
       return { result }
     })
   )
@@ -98,5 +109,43 @@ export function registerIpcHandlers(): void {
         return generateTrayBase(req)
       }
     )
+  )
+
+  ipcMain.handle(
+    IpcChannels.EXPORT_REVEAL,
+    wrapHandler((zipPath: string): { ok: true } => {
+      if (typeof zipPath !== 'string' || !zipPath.trim()) {
+        throw new IpcException('INVALID_PATH', '文件路径无效')
+      }
+      revealExportZip(zipPath)
+      return { ok: true }
+    })
+  )
+
+  ipcMain.handle(
+    IpcChannels.EXPORT_GENERATE,
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      req: ExportGenerateRequest
+    ): Promise<ExportGenerateResponse> => {
+      try {
+        if (!req?.config) {
+          throw new IpcException('INVALID_REQUEST', '缺少 config 快照')
+        }
+        const win = BrowserWindow.fromWebContents(event.sender)
+        return await generateModelsZip(
+          req,
+          (progress) => {
+            event.sender.send(IpcChannels.EXPORT_PROGRESS, progress)
+          },
+          win
+        )
+      } catch (err) {
+        if (err instanceof IpcException) {
+          throw err.toJSON() satisfies IpcError
+        }
+        throw err
+      }
+    }
   )
 }

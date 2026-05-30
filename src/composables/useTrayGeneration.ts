@@ -23,6 +23,13 @@ export function useTrayGeneration() {
   let requestId = 0;
 
   async function runGeneration(): Promise<void> {
+    if (!config.value.gpx.imported) {
+      mesh.value = null;
+      hasBorderText.value = false;
+      error.value = null;
+      return;
+    }
+
     const validation = validateTrayFromAppConfig(config.value);
     if (!validation.valid) {
       error.value = validation.message ?? "托盘参数无效";

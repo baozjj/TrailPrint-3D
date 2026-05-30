@@ -1,43 +1,59 @@
 import type { GpxPoint } from "../types";
+import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
+import { clipPolylineToFootprint } from "./footprint";
+import { maskMmScale } from "./map-mm-projection";
+import { projectPoint } from "./map-projection";
 
 export interface TrailPointMm {
   x: number;
   y: number;
 }
 
-/**
- * 将经纬度映射到与 Terrain_Main 一致的模型平面坐标 (mm)。
- * 规则：与 DEM 网格相同，按 crop 外接经纬度矩形线性插值；Z 由主进程高度场采样。
- */
-export function geoToModelMm(
-  point: GpxPoint,
-  crop: TerrainCropRegion,
-): TrailPointMm | null {
-  const lonSpan = crop.maxLon - crop.minLon;
-  const latSpan = crop.maxLat - crop.minLat;
-  if (lonSpan < 1e-12 || latSpan < 1e-12) return null;
-
-  const s = (point.lon - crop.minLon) / lonSpan;
-  const t = (point.lat - crop.minLat) / latSpan;
-  if (s < -0.02 || s > 1.02 || t < -0.02 || t > 1.02) return null;
-
-  const hw = crop.widthMm / 2;
-  const hh = crop.heightMm / 2;
-  return {
-    x: -hw + crop.widthMm * s,
-    y: -hh + crop.heightMm * t,
-  };
+export interface ProjectTrailOptions {
+  mapCrop: MapCropConfig;
+  viewportWidth: number;
+  viewportHeight: number;
 }
 
+/**
+ * 与 2D 地图一致：GPX → 屏幕像素 → 模型平面 mm（以遮罩中心为原点）。
+ * 保证「地图上看见的轨迹」与 STL 轨迹一致。
+ */
 export function projectTrailToModelMm(
   points: GpxPoint[],
   crop: TerrainCropRegion,
+  options: ProjectTrailOptions,
 ): TrailPointMm[] {
-  const out: TrailPointMm[] = [];
+  const { mapCrop, viewportWidth, viewportHeight } = options;
+  const w = Math.max(viewportWidth, 64);
+  const h = Math.max(viewportHeight, 64);
+  const scale = maskMmScale(mapCrop, crop, w, h);
+  const center = { lat: mapCrop.mapCenterLat, lon: mapCrop.mapCenterLon };
+  const zoom = mapCrop.mapZoom;
+
+  const mapped: TrailPointMm[] = [];
   for (const p of points) {
-    const mm = geoToModelMm(p, crop);
-    if (mm) out.push(mm);
+    const scr = projectPoint(p, center, zoom, w, h);
+    mapped.push({
+      x: (scr.x - scale.cx) * scale.scaleX,
+      y: (scale.cy - scr.y) * scale.scaleY,
+    });
+  }
+
+  if (mapped.length < 2) return [];
+
+  const clipped = clipPolylineToFootprint(mapped, crop);
+  return dedupeAdjacentMm(clipped);
+}
+
+function dedupeAdjacentMm(points: TrailPointMm[]): TrailPointMm[] {
+  if (points.length === 0) return points;
+  const out: TrailPointMm[] = [points[0]!];
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i]!;
+    const prev = out[out.length - 1]!;
+    if (Math.hypot(p.x - prev.x, p.y - prev.y) > 0.05) out.push(p);
   }
   return out;
 }
@@ -68,7 +84,7 @@ export function resamplePolyline(
     carry = len - (dist - stepMm);
     out.push(b);
   }
-  return out;
+  return out.length >= 2 ? out : polyline.slice();
 }
 
 export function distanceToPolylineMm(

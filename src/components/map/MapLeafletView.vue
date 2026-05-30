@@ -16,10 +16,12 @@ import {
   trayOuterPolygonPoints,
 } from "@/utils/tray-mask-geometry";
 import { useUiStore } from "@/stores/ui";
+import { maskFitPadding } from "@shared/utils/map-projection";
 
 const configStore = useConfigStore();
 const ui = useUiStore();
 const { config } = storeToRefs(configStore);
+const { gpxMapFitNonce } = storeToRefs(ui);
 const { borderTextEnabled } = storeToRefs(ui);
 const { effectivePoints } = useTrailPoints();
 
@@ -167,21 +169,48 @@ function updateTrackLayer(): void {
   trackLayer.value = L.polyline(latlngs, TRACK_STYLE).addTo(map);
 }
 
-function fitTrackInView(): void {
+let fitRetryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function fitTrackInView(attempt = 0): void {
   const map = mapInstance.value;
   const bounds = config.value.gpx.bounds;
-  if (!map || !bounds) return;
+  if (!map || !bounds || !config.value.gpx.imported) return;
 
-  const leafletBounds = L.latLngBounds(
+  updateMaskLayout();
+  map.invalidateSize({ animate: false });
+
+  const wrap = mapWrap.value;
+  const w = wrap?.clientWidth ?? 0;
+  const h = wrap?.clientHeight ?? 0;
+  if (w < 32 || h < 32) {
+    if (attempt < 8) {
+      fitRetryTimer = setTimeout(() => fitTrackInView(attempt + 1), 50);
+    }
+    return;
+  }
+
+  const latLngBounds = L.latLngBounds(
     [bounds.minLat, bounds.minLon],
     [bounds.maxLat, bounds.maxLon],
   );
-  map.fitBounds(leafletBounds, {
-    padding: [80, 80],
-    maxZoom: 16,
+  map.fitBounds(latLngBounds, {
+    padding: maskFitPadding(config.value.mapCrop, w, h),
+    maxZoom: 19,
     animate: false,
   });
   syncStoreFromMap();
+  updateTrackLayer();
+}
+
+function scheduleFitTrackInView(): void {
+  if (fitRetryTimer) {
+    clearTimeout(fitRetryTimer);
+    fitRetryTimer = null;
+  }
+  requestAnimationFrame(() => {
+    fitTrackInView();
+    requestAnimationFrame(() => fitTrackInView());
+  });
 }
 
 /** Alt/Option + 拖拽：绕视窗中心旋转地图（遮罩保持固定） */
@@ -285,14 +314,17 @@ function initMap(): void {
   updateTrackLayer();
 
   if (config.value.gpx.imported && config.value.gpx.bounds) {
-    requestAnimationFrame(() => fitTrackInView());
+    scheduleFitTrackInView();
   }
 }
 
 let resizeObserver: ResizeObserver | null = null;
 
+let unregisterPrepareExport: (() => void) | null = null;
+
 onMounted(() => {
   initMap();
+  unregisterPrepareExport = ui.registerPrepareExportHook(syncStoreFromMap);
   const wrap = mapWrap.value;
   if (wrap) {
     resizeObserver = new ResizeObserver(() => {
@@ -304,7 +336,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  if (fitRetryTimer) clearTimeout(fitRetryTimer);
   resizeObserver?.disconnect();
+  unregisterPrepareExport?.();
+  unregisterPrepareExport = null;
   teardownAltRotate?.();
   teardownAltRotate = null;
   mapInstance.value?.remove();
@@ -322,22 +357,42 @@ watch(
 watch(
   () => config.value.gpx.imported,
   (v) => {
-    if (v) requestAnimationFrame(() => fitTrackInView());
+    if (v) scheduleFitTrackInView();
     else updateTrackLayer();
+  },
+);
+
+watch(gpxMapFitNonce, () => {
+  if (config.value.gpx.imported && config.value.gpx.bounds) {
+    scheduleFitTrackInView();
+  }
+});
+
+watch(
+  () => config.value.gpx.bounds,
+  (bounds) => {
+    if (config.value.gpx.imported && bounds) scheduleFitTrackInView();
   },
 );
 
 watch(
   () => [
     config.value.mapCrop.shape,
+    config.value.mapCrop.radiusMm,
     config.value.mapCrop.lengthMm,
     config.value.mapCrop.widthMm,
     config.value.mapCrop.polygonSides,
+    config.value.mapCrop.polygonSideLengthMm,
     config.value.tray.rimWidthMm,
     config.value.tray.borderTextByEdge,
     borderTextEnabled.value,
   ],
-  () => updateMaskLayout(),
+  () => {
+    updateMaskLayout();
+    if (config.value.gpx.imported && config.value.gpx.bounds) {
+      scheduleFitTrackInView();
+    }
+  },
 );
 
 watch(
@@ -352,7 +407,7 @@ watch(
   },
 );
 
-defineExpose({ fitTrackInView });
+defineExpose({ fitTrackInView: scheduleFitTrackInView, syncStoreFromMap });
 </script>
 
 <template>

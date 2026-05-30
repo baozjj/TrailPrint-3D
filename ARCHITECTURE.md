@@ -5,7 +5,7 @@
 | 进程 | 职责 |
 | --- | --- |
 | **渲染进程** (`src/`) | 界面展示、Pinia 参数状态、地图交互、轻量 3D 预览 |
-| **主进程** (`electron/main/`) | GPX 解析、DEM 采样、网格布尔/挖槽、STL 写出、文件系统、ZIP 打包 |
+| **主进程** (`electron/main/`) | GPX 解析、DEM 采样（OpenTopography GeoTIFF + 本地缓存）、网格布尔/挖槽、STL 写出、文件系统、ZIP 打包 |
 
 UI 线程不执行上述重度计算；耗时工作通过 `task:enqueue` 进入主进程任务队列。
 
@@ -37,4 +37,4 @@ src/               Vue 3 渲染进程、stores、ipc 客户端
 - Terrain_Main / Trail_Line：`terrain:generate` IPC + `electron/main/terrain/`；挖槽与轨迹见 `trail-groove.ts`、`trail-line-mesh.ts`；贴合规则见 `docs/trail-projection.md`
 - Tray_Base：`tray:generate` IPC + `electron/main/tray/`；字体清单见 `shared/tray/font-catalog.ts`、`assets/fonts/README.md`
 - 装配公差与磁铁孔：`config.assembly` → `trail-pipeline` / `tray-footprint` / `electron/main/assembly/`（圆柱布尔减）
-- STL/ZIP：`stl-export`、`zip-pack` 任务种类已预留
+- STL/ZIP：`export:generate` IPC + `electron/main/export/`（二进制 STL、`archiver` ZIP、保存对话框）

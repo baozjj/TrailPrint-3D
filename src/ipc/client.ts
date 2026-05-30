@@ -11,7 +11,10 @@ import type {
   TerrainGenerateRequest,
   TerrainGenerateResponse,
   TrayGenerateRequest,
-  TrayGenerateResponse
+  TrayGenerateResponse,
+  ExportGenerateRequest,
+  ExportGenerateResponse,
+  ExportProgress
 } from '@shared/ipc/types'
 
 function getApi(): Window['trailPrint'] {
@@ -53,11 +56,34 @@ export async function ipcGenerateTray(
   return getApi().generateTray(req)
 }
 
+export async function ipcGenerateExport(
+  req: ExportGenerateRequest
+): Promise<ExportGenerateResponse> {
+  return getApi().generateExport(req)
+}
+
+export async function ipcRevealExport(zipPath: string): Promise<void> {
+  await getApi().revealExport(zipPath)
+}
+
+export function ipcOnExportProgress(
+  callback: (progress: ExportProgress) => void
+): () => void {
+  return getApi().onExportProgress(callback)
+}
+
 export function formatIpcError(err: unknown): string {
   if (isIpcError(err)) {
     return err.message
   }
   if (err instanceof Error) {
+    const stripped = err.message.replace(
+      /^Error invoking remote method '[^']+':\s*/,
+      '',
+    )
+    if (stripped && stripped !== '[object Object]') {
+      return stripped
+    }
     return err.message
   }
   return String(err)

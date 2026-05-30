@@ -18,7 +18,9 @@ GPX 点 `(lat, lon)` 映射到与 `Terrain_Main` 相同的模型平面 (mm)：
 
 ## 装配公差（任务-06）
 
-- `config.assembly.trailToleranceMm` 仅扩大凹槽宽度：`trailWidth + 2×tolerance`，不改变 `Trail_Line` 实体宽度
+- `config.assembly.trailToleranceMm` 扩大凹槽宽度：`trailWidth + 2×tolerance`
+- `Trail_Line` 实体宽度（预览与 STL 一致）：`trailWidth − 2×tolerance`
+- 地图遮罩像素大小随侧栏物理尺寸（半径/长宽/边长 mm）同比缩放，与 STL 外轮廓一致
 - `config.assembly.trayToleranceMm` 扩大托盘凹槽相对主模型外轮廓
 
 ## 磁铁孔（任务-06）

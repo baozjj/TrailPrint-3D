@@ -39,7 +39,7 @@ const isPolygon = computed(() => config.value.mapCrop.shape === "polygon");
     </div>
 
     <p class="field-hint">
-      地图遮罩大小固定；下方 mm 尺寸仅用于生成 STL 模型。
+      遮罩大小与下方 mm 尺寸联动；拖拽/缩放地图以调整轨迹在打印区域内的位置。
     </p>
 
     <div class="row">
