@@ -65,6 +65,8 @@ export interface TrailConfig {
   gpxSimplify: boolean;
   trailWidthMm: number;
   trailDepthMm: number;
+  /** 轨迹顶面高出主模型对应地表的高度 (mm)，用于导出 STL 装配 */
+  heightAboveMainMm: number;
 }
 
 // ─── 模块四：托盘底座与文字 ───────────────────────────────────────────
@@ -189,6 +191,7 @@ export function createDefaultConfig(): AppConfig {
       gpxSimplify: false,
       trailWidthMm: 4,
       trailDepthMm: 1.5,
+      heightAboveMainMm: 0.12,
     },
     tray: {
       totalThicknessMm: 8,

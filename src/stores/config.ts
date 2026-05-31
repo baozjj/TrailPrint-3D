@@ -4,6 +4,7 @@ import {
   createDefaultConfig,
   type AppConfig,
   type GpxPoint,
+  type TrailConfig,
 } from "@shared/types";
 import type { GpxImportResult } from "@shared/types/gpx";
 import { zoomToFitBoundsInMask } from "@shared/utils/map-projection";
@@ -31,9 +32,19 @@ function applyOpenTopoApiKey(cfg: AppConfig): void {
   cfg.terrain.openTopographyApiKey = resolveOpenTopoApiKeyForUi();
 }
 
+function ensureTrailConfigDefaults(cfg: AppConfig): void {
+  const trail = cfg.trail as TrailConfig & { heightAboveMainMm?: number };
+  if (trail.heightAboveMainMm == null) {
+    const legacy = (cfg.assembly as { trailProtrusionMm?: number })
+      .trailProtrusionMm;
+    trail.heightAboveMainMm = legacy ?? 0.12;
+  }
+}
+
 export const useConfigStore = defineStore("config", () => {
   const config = ref<AppConfig>(createDefaultConfig());
   applyOpenTopoApiKey(config.value);
+  ensureTrailConfigDefaults(config.value);
 
   watch(
     () => config.value.terrain.openTopographyApiKey,
@@ -51,6 +62,7 @@ export const useConfigStore = defineStore("config", () => {
   function resetConfig(): void {
     config.value = createDefaultConfig();
     applyOpenTopoApiKey(config.value);
+    ensureTrailConfigDefaults(config.value);
   }
 
   function patchConfig(partial: Partial<AppConfig>): void {

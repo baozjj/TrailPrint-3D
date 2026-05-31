@@ -1,4 +1,4 @@
-import type { AppConfig } from "../types/config";
+import type { AppConfig, TrailConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
 import type { TrailPointMm } from "./trail-coords";
 
@@ -260,4 +260,24 @@ export function trailLineWidthMmForPrint(config: AppConfig): number {
   const shrunk =
     config.trail.trailWidthMm - 2 * config.assembly.trailToleranceMm;
   return Math.max(0.2, shrunk);
+}
+
+/** 轨迹顶面高出主模型对应地表的高度 (mm) */
+export function trailHeightAboveMainMm(config: AppConfig): number {
+  const trail = config.trail as TrailConfig & {
+    heightAboveMainMm?: number;
+  };
+  const legacy = (config.assembly as { trailProtrusionMm?: number })
+    .trailProtrusionMm;
+  return Math.max(0, trail.heightAboveMainMm ?? legacy ?? 0);
+}
+
+/** @deprecated 使用 trailHeightAboveMainMm */
+export function trailLineZTopOffsetMmForPrint(config: AppConfig): number {
+  return trailHeightAboveMainMm(config);
+}
+
+/** STL 用 Trail_Line 厚度：槽深 + 可配置高出量（仅用于几何校验门槛） */
+export function trailLineDepthMmForPrint(config: AppConfig): number {
+  return config.trail.trailDepthMm + trailHeightAboveMainMm(config);
 }

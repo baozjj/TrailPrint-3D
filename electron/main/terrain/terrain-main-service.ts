@@ -15,9 +15,18 @@ import {
   minHeightFieldMm,
 } from "@shared/utils/heightfield-mesh";
 import { buildTrailLineMesh } from "./trail-line-mesh";
-import { buildTrailLinePolyline } from "./trail-pipeline";
+import {
+  buildTrailGrooveSpec,
+  buildTrailLinePolyline,
+} from "./trail-pipeline";
+import { applyGrooveToHeightField } from "./trail-groove";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
-import { trailLineWidthMmForPrint } from "@shared/utils/footprint";
+import {
+  trailLineDepthMmForPrint,
+  trailLineWidthMmForPrint,
+  trailHeightAboveMainMm,
+} from "@shared/utils/footprint";
+import { computeFlatGrooveFloorZMm } from "@shared/utils/trail-groove-floor";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
 import {
   metersPerDegreeLat,
@@ -147,6 +156,31 @@ export async function generateTerrainMain(
     meshQualityCustom,
   );
   const heightMm = smoothed;
+  const surfaceForTrail = new Float64Array(heightMm);
+  let flatFloorZ: number | null = null;
+
+  if (buildExportMesh) {
+    const groove = buildTrailGrooveSpec(
+      config,
+      crop,
+      viewportWidth,
+      viewportHeight,
+    );
+    if (groove) {
+      flatFloorZ = computeFlatGrooveFloorZMm({
+        polylineMm: groove.polylineMm,
+        widthMm: groove.widthMm,
+        depthMm: groove.depthMm,
+        surfaceMm: surfaceForTrail,
+        cols,
+        rows,
+        crop,
+      });
+      if (flatFloorZ != null) groove.floorZMm = flatFloorZ;
+      applyGrooveToHeightField(heightMm, cols, rows, crop, groove, surfaceForTrail);
+    }
+  }
+
   const minSurfaceZ = minHeightFieldMm(heightMm);
   const baseThicknessMm = config.terrain.baseSolidThicknessMm;
 
@@ -180,11 +214,13 @@ export async function generateTerrainMain(
     trailMesh = buildTrailLineMesh({
       polylineMm,
       widthMm: printWidth,
-      depthMm: config.trail.trailDepthMm,
-      heightMm,
+      depthMm: trailLineDepthMmForPrint(config),
+      heightMm: surfaceForTrail,
       cols,
       rows,
       crop,
+      flatFloorZMm: flatFloorZ ?? undefined,
+      zTopOffsetMm: trailHeightAboveMainMm(config),
       sampleStepMm: Math.max(
         qualitySpec.trailMinStepMm,
         printWidth / qualitySpec.trailStepDivisor,

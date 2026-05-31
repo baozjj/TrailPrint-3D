@@ -13,6 +13,10 @@ export interface BuildTrailLineOptions {
   crop: TerrainCropRegion;
   /** 路径重采样步长 (mm)，未指定时按宽度自动 */
   sampleStepMm?: number;
+  /** 顶面相对 heightMm 采样的抬升 (mm)；平底模式下顶面贴合地表并叠加此抬升 */
+  zTopOffsetMm?: number;
+  /** 平底轨迹/凹槽共用底面 Z (mm)；导出时与主模型槽底一致 */
+  flatFloorZMm?: number;
 }
 
 const MIN_SEGMENT_MM = 0.35;
@@ -195,8 +199,37 @@ export function buildTrailLineMesh(
 
   const samples: Array<{ x: number; y: number; zTop: number; zBot: number }> =
     [];
+  const flatFloor = opts.flatFloorZMm;
+  const useFlatFloor =
+    flatFloor != null && Number.isFinite(flatFloor) && depthMm > 0;
+
   for (const p of path) {
-    const zTop = sampleHeightBilinearMm(p.x, p.y, heightMm, cols, rows, crop, 0);
+    if (useFlatFloor) {
+      const zBot = flatFloor!;
+      const zSurface = sampleHeightBilinearMm(
+        p.x,
+        p.y,
+        heightMm,
+        cols,
+        rows,
+        crop,
+        zBot,
+      );
+      const zTop = zSurface + (opts.zTopOffsetMm ?? 0);
+      if (zTop <= zBot + 1e-4) continue;
+      samples.push({ x: p.x, y: p.y, zTop, zBot });
+      continue;
+    }
+    const zBase = sampleHeightBilinearMm(
+      p.x,
+      p.y,
+      heightMm,
+      cols,
+      rows,
+      crop,
+      0,
+    );
+    const zTop = zBase + (opts.zTopOffsetMm ?? 0);
     samples.push({ x: p.x, y: p.y, zTop, zBot: zTop - depthMm });
   }
 
