@@ -36,8 +36,8 @@ function isInsideCut(
   return z >= cut.zBottom - EPS && z <= cut.zTop + EPS;
 }
 
-/** 仅当三角面完全落在圆柱内才剔除，避免误删边界面导致大面积镂空 */
-function triangleFullyInsideCut(
+/** 三角面是否与圆柱切割体相交（用于打孔，避免仅删除完全体内三角面导致孔打不穿） */
+function triangleIntersectsCut(
   positions: number[],
   i0: number,
   i1: number,
@@ -47,11 +47,17 @@ function triangleFullyInsideCut(
   const v0 = vertexAt(positions, i0);
   const v1 = vertexAt(positions, i1);
   const v2 = vertexAt(positions, i2);
-  return (
-    isInsideCut(v0.x, v0.y, v0.z, cut) &&
-    isInsideCut(v1.x, v1.y, v1.z, cut) &&
+  if (
+    isInsideCut(v0.x, v0.y, v0.z, cut) ||
+    isInsideCut(v1.x, v1.y, v1.z, cut) ||
     isInsideCut(v2.x, v2.y, v2.z, cut)
-  );
+  ) {
+    return true;
+  }
+  const cx = (v0.x + v1.x + v2.x) / 3;
+  const cy = (v0.y + v1.y + v2.y) / 3;
+  const cz = (v0.z + v1.z + v2.z) / 3;
+  return isInsideCut(cx, cy, cz, cut);
 }
 
 function appendCylinderCap(
@@ -144,7 +150,7 @@ export function applyCylinderCuts(
     const i1 = mesh.indices[t + 1]!;
     const i2 = mesh.indices[t + 2]!;
     const remove = cuts.some((cut) =>
-      triangleFullyInsideCut(mesh.positions, i0, i1, i2, cut),
+      triangleIntersectsCut(mesh.positions, i0, i1, i2, cut),
     );
     if (!remove) {
       kept.push(i0, i1, i2);
@@ -155,6 +161,9 @@ export function applyCylinderCuts(
   for (const cut of cuts) {
     appendCylinderWall(positions, indices, cut);
     appendCylinderCap(positions, indices, cut, cut.zTop, true);
+    if (cut.zBottom > mesh.bottomZ + EPS) {
+      appendCylinderCap(positions, indices, cut, cut.zBottom, false);
+    }
   }
 
   return {

@@ -20,30 +20,34 @@ const { openSections } = storeToRefs(ui)
     :open="openSections.assembly"
     @toggle="ui.toggleSection('assembly')"
   >
+    <div class="row">
+      <NumberField
+        v-model="config.assembly.trailToleranceMm"
+        label="轨迹槽公差"
+        suffix="mm"
+        :min="0"
+        :max="1"
+        :step="0.01"
+      />
+      <NumberField
+        v-model="config.assembly.trayToleranceMm"
+        label="底座槽公差"
+        suffix="mm"
+        :min="0"
+        :max="1"
+        :step="0.01"
+      />
+    </div>
+
     <div class="toggle-row">
       <span>启用免胶水磁吸装配</span>
       <IosToggle v-model="config.assembly.magnet.enabled" />
     </div>
 
     <template v-if="config.assembly.magnet.enabled">
-      <div class="row">
-        <NumberField
-          v-model="config.assembly.trailToleranceMm"
-          label="轨迹槽公差"
-          suffix="mm"
-          :min="0"
-          :max="1"
-          :step="0.01"
-        />
-        <NumberField
-          v-model="config.assembly.trayToleranceMm"
-          label="底座槽公差"
-          suffix="mm"
-          :min="0"
-          :max="1"
-          :step="0.01"
-        />
-      </div>
+      <p class="hint">
+        请勾选下方孔位类型，否则不会生成磁铁孔。拼接孔会打在主模型底面与托盘凹槽底面。
+      </p>
       <div class="row">
         <NumberField
           v-model="config.assembly.magnet.diameterMm"
@@ -85,5 +89,12 @@ const { openSections } = storeToRefs(ui)
   align-items: center;
   justify-content: space-between;
   font-size: 14px;
+}
+
+.hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--color-text-secondary, #888);
 }
 </style>

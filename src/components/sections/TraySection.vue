@@ -1,45 +1,45 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { storeToRefs } from 'pinia'
-import type { BorderTextEdge, EngraveStyle, TextFacing } from '@shared/types'
-import { useConfigStore } from '@/stores/config'
-import { useUiStore } from '@/stores/ui'
-import { useBorderText } from '@/composables/useBorderText'
-import { TRAY_FONT_CATALOG } from '@shared/tray/font-catalog'
-import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
-import AccordionSection from '@/components/ui/AccordionSection.vue'
-import SegmentedControl from '@/components/ui/SegmentedControl.vue'
-import IosToggle from '@/components/ui/IosToggle.vue'
-import NumberField from '@/components/ui/NumberField.vue'
+import { computed } from "vue";
+import { storeToRefs } from "pinia";
+import type { BorderTextEdge, EngraveStyle, TextFacing } from "@shared/types";
+import { useConfigStore } from "@/stores/config";
+import { useUiStore } from "@/stores/ui";
+import { useBorderText } from "@/composables/useBorderText";
+import { TRAY_FONT_CATALOG } from "@shared/tray/font-catalog";
+import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import AccordionSection from "@/components/ui/AccordionSection.vue";
+import SegmentedControl from "@/components/ui/SegmentedControl.vue";
+import IosToggle from "@/components/ui/IosToggle.vue";
+import NumberField from "@/components/ui/NumberField.vue";
 
-const configStore = useConfigStore()
-const ui = useUiStore()
-const { config } = storeToRefs(configStore)
-const { openSections, borderTextEnabled, globalEngraveStyle } = storeToRefs(ui)
-const { supportsBorderText, edgeLabels } = useBorderText()
+const configStore = useConfigStore();
+const ui = useUiStore();
+const { config } = storeToRefs(configStore);
+const { openSections, borderTextEnabled, globalEngraveStyle } = storeToRefs(ui);
+const { supportsBorderText, edgeLabels } = useBorderText();
 
 const engraveOptions: { value: EngraveStyle; label: string }[] = [
-  { value: 'intaglio', label: '阴刻(凹)' },
-  { value: 'relief', label: '阳刻(凸)' }
-]
+  { value: "intaglio", label: "阴刻(凹)" },
+  { value: "relief", label: "阳刻(凸)" },
+];
 
 const fontOptions = TRAY_FONT_CATALOG.map((f) => ({
   value: f.id,
-  label: f.label
-}))
+  label: f.label,
+}));
 
 const trayError = computed(() => {
-  const v = validateTrayFromAppConfig(config.value)
-  return v.valid ? null : v.message
-})
+  const v = validateTrayFromAppConfig(config.value);
+  return v.valid ? null : v.message;
+});
 
 function edgeAt(index: number): BorderTextEdge | undefined {
-  return config.value.tray.borderTextByEdge[index]
+  return config.value.tray.borderTextByEdge[index];
 }
 
 function patchEdge(index: number, patch: Partial<BorderTextEdge>): void {
-  const edge = edgeAt(index)
-  if (edge) Object.assign(edge, patch)
+  const edge = edgeAt(index);
+  if (edge) Object.assign(edge, patch);
 }
 </script>
 
@@ -158,7 +158,10 @@ function patchEdge(index: number, patch: Partial<BorderTextEdge>): void {
                       外
                     </button>
                   </div>
-                  <label class="ctrl ctrl--offset" title="垂直于边、相对边框带中线的偏移 (mm)">
+                  <label
+                    class="ctrl ctrl--offset"
+                    title="垂直于边、相对边框带中线的偏移 (mm)"
+                  >
                     <span class="ctrl__mini">垂直</span>
                     <input
                       type="number"

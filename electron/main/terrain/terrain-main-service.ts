@@ -20,6 +20,8 @@ import {
   buildTrailLinePolyline,
 } from "./trail-pipeline";
 import { applyGrooveToHeightField } from "./trail-groove";
+import { applyTerrainSnapFitHoles } from "../assembly/apply-magnet-holes";
+import { imprintGrooveOnTerrainMesh } from "@shared/utils/trail-groove-imprint";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import {
   trailLineDepthMmForPrint,
@@ -158,33 +160,41 @@ export async function generateTerrainMain(
   const heightMm = smoothed;
   const surfaceForTrail = new Float64Array(heightMm);
   let flatFloorZ: number | null = null;
+  let exportGroove: ReturnType<typeof buildTrailGrooveSpec> = undefined;
 
   if (buildExportMesh) {
-    const groove = buildTrailGrooveSpec(
+    exportGroove = buildTrailGrooveSpec(
       config,
       crop,
       viewportWidth,
       viewportHeight,
     );
-    if (groove) {
+    if (exportGroove) {
       flatFloorZ = computeFlatGrooveFloorZMm({
-        polylineMm: groove.polylineMm,
-        widthMm: groove.widthMm,
-        depthMm: groove.depthMm,
+        polylineMm: exportGroove.polylineMm,
+        widthMm: exportGroove.widthMm,
+        depthMm: exportGroove.depthMm,
         surfaceMm: surfaceForTrail,
         cols,
         rows,
         crop,
       });
-      if (flatFloorZ != null) groove.floorZMm = flatFloorZ;
-      applyGrooveToHeightField(heightMm, cols, rows, crop, groove, surfaceForTrail);
+      if (flatFloorZ != null) exportGroove.floorZMm = flatFloorZ;
+      applyGrooveToHeightField(
+        heightMm,
+        cols,
+        rows,
+        crop,
+        exportGroove,
+        surfaceForTrail,
+      );
     }
   }
 
   const minSurfaceZ = minHeightFieldMm(heightMm);
   const baseThicknessMm = config.terrain.baseSolidThicknessMm;
 
-  const mesh: TerrainMeshPayload = buildExportMesh
+  let mesh: TerrainMeshPayload = buildExportMesh
     ? buildHeightfieldTerrainMesh(
         crop,
         heightMm,
@@ -193,6 +203,11 @@ export async function generateTerrainMain(
         baseThicknessMm,
       )
     : { ...EMPTY_TERRAIN_MESH, gridCols: cols, gridRows: rows };
+
+  if (buildExportMesh) {
+    mesh = imprintGrooveOnTerrainMesh(mesh, exportGroove);
+    mesh = applyTerrainSnapFitHoles(mesh, config);
+  }
 
   const heightPreview = heightPreviewFromField(
     heightMm,

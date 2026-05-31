@@ -61,20 +61,11 @@ export function applyTrayMagnetHoles(
   const cuts: CylinderCut[] = [];
 
   if (layout.snapFit.length) {
-    cuts.push(
-      ...holesToCuts(
-        layout.snapFit,
-        radius,
-        floorZ - depth,
-        floorZ,
-      ),
-    );
+    cuts.push(...holesToCuts(layout.snapFit, radius, floorZ - depth, floorZ));
   }
 
   if (layout.fridge.length) {
-    cuts.push(
-      ...holesToCuts(layout.fridge, radius, 0, depth),
-    );
+    cuts.push(...holesToCuts(layout.fridge, radius, 0, depth));
   }
 
   return applyCylinderCuts(mesh, cuts);
