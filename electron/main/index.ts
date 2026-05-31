@@ -6,6 +6,12 @@
  * - 渲染进程（Vue）：界面、地图交互、轻量 3D 预览、参数状态管理
  */
 import { app, BrowserWindow, shell } from 'electron'
+
+/** 高精度 DEM / STL（制版、自定义 1024+）需要更大 V8 堆，默认约 4GB 会 OOM */
+const HEAP_MB = Number.parseInt(process.env.TRAILPRINT_HEAP_MB ?? '8192', 10)
+if (Number.isFinite(HEAP_MB) && HEAP_MB > 0) {
+  app.commandLine.appendSwitch('js-flags', `--max-old-space-size=${HEAP_MB}`)
+}
 import { existsSync } from 'fs'
 import { join } from 'path'
 import { registerIpcHandlers } from './ipc/handlers'

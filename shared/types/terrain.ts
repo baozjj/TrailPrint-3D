@@ -24,7 +24,7 @@ export interface TerrainHeightPreview {
   cols: number;
   rows: number;
   /** 行优先地表高度 (mm)，已含挖槽 */
-  heights: number[];
+  heights: Float64Array | number[];
   minSurfaceZ: number;
   bottomZ: number;
   baseThicknessMm: number;

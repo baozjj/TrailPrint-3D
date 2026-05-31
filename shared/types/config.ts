@@ -37,13 +37,21 @@ export type TerrainMeshQuality =
   | "high"
   | "ultra"
   | "extreme"
-  | "studio";
+  | "studio"
+  | "custom";
+
+/** meshQuality === "custom" 时生效：DEM 网格单边最大采样数 */
+export interface TerrainMeshQualityCustom {
+  maxGrid: number;
+}
 
 export interface TerrainConfig {
   baseSolidThicknessMm: number;
   zExaggeration: number;
   /** DEM 网格密度：影响 3D 预览与 STL 导出 */
   meshQuality: TerrainMeshQuality;
+  /** 自定义精度参数（仅 meshQuality 为 custom 时使用） */
+  meshQualityCustom: TerrainMeshQualityCustom;
   smoothing: TerrainSmoothing;
   /** OpenTopography 数据集，见 shared/types/dem.ts */
   demDataset: OpenTopoDemType;
@@ -172,6 +180,7 @@ export function createDefaultConfig(): AppConfig {
       baseSolidThicknessMm: 3,
       zExaggeration: 2,
       meshQuality: "high",
+      meshQualityCustom: { maxGrid: 512 },
       smoothing: "light",
       demDataset: "COP30",
       openTopographyApiKey: "",

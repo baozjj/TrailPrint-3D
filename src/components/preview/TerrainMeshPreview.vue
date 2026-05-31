@@ -121,7 +121,10 @@ async function rebuildScene(): Promise<void> {
 
   imageryLoading.value = true;
   try {
-    const texPx = terrainMeshQualitySpec(config.value.terrain.meshQuality).texturePx;
+    const texPx = terrainMeshQualitySpec(
+      config.value.terrain.meshQuality,
+      config.value.terrain.meshQualityCustom,
+    ).texturePx;
     const canvas = await fetchSatelliteTextureForCrop(r.crop, texPx);
     if (token !== rebuildToken) return;
     disposeSatelliteTexture();
@@ -162,10 +165,10 @@ async function rebuildScene(): Promise<void> {
   const trailWidth = r.trailDisplayWidthMm ?? 4;
 
   if (polyline.length >= 2) {
-    const tubeSegs = trailPreviewTubeSegments(
-      polyline.length,
-      config.value.terrain.meshQuality,
-    );
+    const tubeSegs = trailPreviewTubeSegments(polyline.length, {
+      meshQuality: config.value.terrain.meshQuality,
+      meshQualityCustom: config.value.terrain.meshQualityCustom,
+    });
     const tubeGeo = buildTrailTubeGeometry(
       polyline,
       preview,

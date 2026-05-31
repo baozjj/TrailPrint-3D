@@ -3,8 +3,11 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { TerrainMeshQuality, TerrainSmoothing } from '@shared/types'
 import {
+  CUSTOM_MESH_GRID_MAX,
+  CUSTOM_MESH_GRID_MIN,
   demSampleCount,
-  meshQualitySummary
+  meshQualitySummary,
+  normalizeMeshQualityCustom
 } from '@shared/utils/terrain-mesh-quality'
 import { OPEN_TOPO_DEM_OPTIONS, openTopoDemTooltipText } from '@shared/types/dem'
 import { useConfigStore } from '@/stores/config'
@@ -27,23 +30,51 @@ const meshQualityOptions: { value: TerrainMeshQuality; label: string }[] = [
   { value: 'high', label: '高精' },
   { value: 'ultra', label: '超高' },
   { value: 'extreme', label: '极致' },
-  { value: 'studio', label: '制版' }
+  { value: 'studio', label: '制版' },
+  { value: 'custom', label: '自定义' }
 ]
 
+const meshQualityParams = computed(() => ({
+  meshQuality: config.value.terrain.meshQuality,
+  meshQualityCustom: config.value.terrain.meshQualityCustom
+}))
+
+const isCustomMeshQuality = computed(
+  () => config.value.terrain.meshQuality === 'custom'
+)
+
+const customMaxGrid = computed({
+  get: () => config.value.terrain.meshQualityCustom.maxGrid,
+  set: (v: number) => {
+    config.value.terrain.meshQualityCustom = normalizeMeshQualityCustom({
+      maxGrid: v
+    })
+  }
+})
+
 const meshQualityHint = computed(() =>
-  meshQualitySummary(config.value.mapCrop, config.value.terrain.meshQuality)
+  meshQualitySummary(config.value.mapCrop, meshQualityParams.value)
 )
 
 const meshQualityPerfHint = computed(() => {
-  const n = demSampleCount(
-    config.value.mapCrop,
-    config.value.terrain.meshQuality
-  )
-  if (config.value.terrain.meshQuality === 'studio') {
-    return `约 ${(n / 1e6).toFixed(1)}M 高程采样；STL 可能达数百 MB，建议 16GB+ 内存。DEM 请用 COP30，平滑用「原始」。`
+  const n = demSampleCount(config.value.mapCrop, meshQualityParams.value)
+  const q = config.value.terrain.meshQuality
+  const sampleLabel =
+    n >= 1_000_000
+      ? `约 ${(n / 1e6).toFixed(1)}M`
+      : `约 ${Math.round(n / 1000)}k`
+  if (q === 'custom') {
+    const heavy =
+      n >= 800_000
+        ? '；需约 8GB+ 可用内存（应用已自动放宽堆上限）'
+        : ''
+    return `${sampleLabel} 高程采样${heavy}。修改上限后需重新生成地形；DEM 建议 COP30。`
   }
-  if (config.value.terrain.meshQuality === 'extreme') {
-    return `约 ${Math.round(n / 1000)}k 采样；生成较慢。建议 DEM 用 COP30 (30m)，平滑用「原始/轻度」。`
+  if (q === 'studio' && n >= 800_000) {
+    return `${sampleLabel} 高程采样；STL 可能很大，建议 16GB+ 内存。DEM 用 COP30，平滑用「原始」。`
+  }
+  if (q === 'extreme') {
+    return `${sampleLabel} 采样；生成较慢。建议 DEM 用 COP30 (30m)，平滑用「原始/轻度」。`
   }
   return '更高档位生成与导出更慢；源 DEM 分辨率（如 COP30 30m）决定地形细节上限。'
 })
@@ -105,6 +136,15 @@ const demHint = computed(() => {
           {{ opt.label }}
         </option>
       </select>
+      <NumberField
+        v-if="isCustomMeshQuality"
+        v-model="customMaxGrid"
+        label="DEM 网格单边上限"
+        :min="CUSTOM_MESH_GRID_MIN"
+        :max="CUSTOM_MESH_GRID_MAX"
+        :step="32"
+        suffix="格"
+      />
       <p class="field-hint">{{ meshQualityHint }}</p>
       <p class="field-hint">{{ meshQualityPerfHint }}</p>
     </div>

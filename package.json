@@ -8,9 +8,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "NODE_OPTIONS=--max-old-space-size=8192 electron-vite dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview",
+    "preview": "NODE_OPTIONS=--max-old-space-size=8192 electron-vite preview",
     "package": "npm run build && electron-builder",
     "typecheck": "vue-tsc --noEmit -p tsconfig.web.json --composite false && tsc --noEmit -p tsconfig.node.json"
   },

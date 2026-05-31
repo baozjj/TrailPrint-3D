@@ -371,18 +371,27 @@ export function buildHeightfieldTerrainMesh(
   );
 }
 
+export function minHeightFieldMm(heightMm: ArrayLike<number>): number {
+  let min = Infinity;
+  for (let i = 0; i < heightMm.length; i++) {
+    const v = heightMm[i]!;
+    if (Number.isFinite(v) && v < min) min = v;
+  }
+  return Number.isFinite(min) ? min : 0;
+}
+
 export function heightPreviewFromField(
-  heightMm: ArrayLike<number>,
+  heightMm: Float64Array,
   cols: number,
   rows: number,
   baseThicknessMm: number,
-  minSurfaceZ: number,
+  minSurfaceZ?: number,
 ): TerrainHeightPreview {
   return {
     cols,
     rows,
-    heights: Array.from(heightMm),
-    minSurfaceZ,
+    heights: heightMm,
+    minSurfaceZ: minSurfaceZ ?? minHeightFieldMm(heightMm),
     bottomZ: -baseThicknessMm,
     baseThicknessMm,
   };

@@ -33,6 +33,8 @@ const PASSES: Record<TerrainSmoothing, number> = {
   heavy: 4,
 };
 
+const FILL_HOLE_MAX_PASSES = 96;
+
 /** 用邻域有效值填补 DEM 无数据点，避免高度场出现孔洞 */
 export function fillDemHoles(
   elevations: Float64Array,
@@ -40,16 +42,20 @@ export function fillDemHoles(
   rows: number,
 ): void {
   const valid = (v: number) => Number.isFinite(v);
+  const scratch = new Float64Array(elevations.length);
   let filled = true;
   let pass = 0;
-  while (filled && pass < cols * rows) {
+
+  while (filled && pass < FILL_HOLE_MAX_PASSES) {
     filled = false;
     pass++;
-    const next = new Float64Array(elevations);
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const i = row * cols + col;
-        if (valid(elevations[i]!)) continue;
+        if (valid(elevations[i]!)) {
+          scratch[i] = elevations[i]!;
+          continue;
+        }
         let sum = 0;
         let count = 0;
         for (let dr = -1; dr <= 1; dr++) {
@@ -65,15 +71,16 @@ export function fillDemHoles(
           }
         }
         if (count > 0) {
-          next[i] = sum / count;
+          scratch[i] = sum / count;
           filled = true;
+        } else {
+          scratch[i] = elevations[i]!;
         }
       }
     }
-    for (let i = 0; i < elevations.length; i++) {
-      if (!valid(elevations[i]!) && valid(next[i]!)) elevations[i] = next[i]!;
-    }
+    elevations.set(scratch);
   }
+
   let sum = 0;
   let count = 0;
   for (let i = 0; i < elevations.length; i++) {

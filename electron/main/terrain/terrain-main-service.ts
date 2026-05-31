@@ -1,5 +1,6 @@
 import type { AppConfig } from "@shared/types";
 import type {
+  TerrainCropRegion,
   TerrainGenerateRequest,
   TerrainGenerateResponse,
   TerrainMeshPayload,
@@ -11,6 +12,7 @@ import { applyTerrainSmoothing, fillDemHoles } from "./smoothing";
 import {
   buildHeightfieldTerrainMesh,
   heightPreviewFromField,
+  minHeightFieldMm,
 } from "@shared/utils/heightfield-mesh";
 import { buildTrailLineMesh } from "./trail-line-mesh";
 import { buildTrailLinePolyline } from "./trail-pipeline";
@@ -22,33 +24,31 @@ import {
   metersPerDegreeLon,
 } from "@shared/utils/map-projection";
 import {
+  demFetchTimeoutMs,
   gridResolutionForQuality,
-  STUDIO_DEM_FETCH_TIMEOUT_MS,
   terrainMeshQualitySpec,
 } from "@shared/utils/terrain-mesh-quality";
 import type { TerrainMeshQuality } from "@shared/types/config";
 
 /**
- * DEM 海拔 (m) → 模型 Z (mm)。
- * 按打印区域水平跨度与地理跨度比例换算垂直高度（与 2D 地图比例一致），再乘 Z 夸张系数。
+ * DEM 海拔 (m) → 模型 Z (mm)，原地写入 elevations，避免高精度下重复分配巨型数组。
  */
-function heightsToMm(
-  dem: Float64Array,
+function elevationsToHeightMmInPlace(
+  elevations: Float64Array,
   crop: TerrainCropRegion,
   zExaggeration: number,
   meshQuality: TerrainMeshQuality | undefined,
-): { heights: Float64Array; baseM: number } {
-  const zCapMm = terrainMeshQualitySpec(meshQuality).zCapMm;
-  let min = Infinity;
-  let max = -Infinity;
-  for (let i = 0; i < dem.length; i++) {
-    const v = dem[i]!;
-    if (!Number.isFinite(v)) continue;
-    if (v < min) min = v;
-    if (v > max) max = v;
+  meshQualityCustom: AppConfig["terrain"]["meshQualityCustom"],
+): { baseM: number } {
+  const zCapMm = terrainMeshQualitySpec(meshQuality, meshQualityCustom).zCapMm;
+  let minM = Infinity;
+  let maxZ = 0;
+  for (let i = 0; i < elevations.length; i++) {
+    const v = elevations[i]!;
+    if (Number.isFinite(v) && v < minM) minM = v;
   }
-  if (!Number.isFinite(min)) min = 0;
-  const baseM = min;
+  if (!Number.isFinite(minM)) minM = 0;
+  const baseM = minM;
 
   const latMid = (crop.minLat + crop.maxLat) / 2;
   const geoW = Math.max(
@@ -57,26 +57,33 @@ function heightsToMm(
   );
   const geoH = Math.max((crop.maxLat - crop.minLat) * metersPerDegreeLat(), 1);
   const horizMm = Math.max(crop.widthMm, crop.heightMm, 20);
-  /** 模型 1mm 水平 ≈ 多少米地理距离；垂直同比例 ×1000 换算为 mm */
   const mmPerMeter = horizMm / Math.max(geoW, geoH);
 
-  const raw = new Float64Array(dem.length);
-  let maxZ = 0;
-  for (let i = 0; i < dem.length; i++) {
-    const v = dem[i]!;
+  for (let i = 0; i < elevations.length; i++) {
+    const v = elevations[i]!;
     const relM = Number.isFinite(v) ? v - baseM : 0;
     const z = relM * mmPerMeter * zExaggeration;
-    raw[i] = z;
+    elevations[i] = z;
     if (z > maxZ) maxZ = z;
   }
 
   const scale = maxZ > zCapMm ? zCapMm / maxZ : 1;
-  const out = new Float64Array(dem.length);
-  for (let i = 0; i < dem.length; i++) {
-    out[i] = raw[i]! * scale;
+  if (scale !== 1) {
+    for (let i = 0; i < elevations.length; i++) {
+      elevations[i] = elevations[i]! * scale;
+    }
   }
-  return { heights: out, baseM };
+  return { baseM };
 }
+
+const EMPTY_TERRAIN_MESH: TerrainMeshPayload = {
+  positions: [],
+  indices: [],
+  minSurfaceZ: 0,
+  bottomZ: 0,
+  gridCols: 0,
+  gridRows: 0,
+};
 
 export async function generateTerrainMain(
   req: TerrainGenerateRequest,
@@ -100,12 +107,16 @@ export async function generateTerrainMain(
   );
 
   const meshQuality = config.terrain.meshQuality ?? "high";
+  const meshQualityCustom =
+    config.terrain.meshQualityCustom ?? { maxGrid: 512 };
   const { cols, rows } = gridResolutionForQuality(
     crop.widthMm,
     crop.heightMm,
     meshQuality,
+    meshQualityCustom,
   );
-  const qualitySpec = terrainMeshQualitySpec(meshQuality);
+  const qualitySpec = terrainMeshQualitySpec(meshQuality, meshQualityCustom);
+  const buildExportMesh = Boolean(req.stlExport);
   const dem = await sampleDemGrid(
     crop,
     cols,
@@ -116,8 +127,7 @@ export async function generateTerrainMain(
     {
       dataset: config.terrain.demDataset,
       openTopographyApiKey: config.terrain.openTopographyApiKey,
-      fetchTimeoutMs:
-        meshQuality === "studio" ? STUDIO_DEM_FETCH_TIMEOUT_MS : undefined,
+      fetchTimeoutMs: demFetchTimeoutMs(meshQuality, meshQualityCustom),
     },
   );
 
@@ -129,29 +139,33 @@ export async function generateTerrainMain(
     config.terrain.smoothing,
   );
 
-  const { heights: heightMm } = heightsToMm(
+  elevationsToHeightMmInPlace(
     smoothed,
     crop,
     config.terrain.zExaggeration,
     meshQuality,
+    meshQualityCustom,
   );
+  const heightMm = smoothed;
+  const minSurfaceZ = minHeightFieldMm(heightMm);
+  const baseThicknessMm = config.terrain.baseSolidThicknessMm;
 
-  const surfaceForTrail = new Float64Array(heightMm);
-
-  const mesh: TerrainMeshPayload = buildHeightfieldTerrainMesh(
-    crop,
-    heightMm,
-    cols,
-    rows,
-    config.terrain.baseSolidThicknessMm,
-  );
+  const mesh: TerrainMeshPayload = buildExportMesh
+    ? buildHeightfieldTerrainMesh(
+        crop,
+        heightMm,
+        cols,
+        rows,
+        baseThicknessMm,
+      )
+    : { ...EMPTY_TERRAIN_MESH, gridCols: cols, gridRows: rows };
 
   const heightPreview = heightPreviewFromField(
     heightMm,
     cols,
     rows,
-    config.terrain.baseSolidThicknessMm,
-    mesh.minSurfaceZ,
+    baseThicknessMm,
+    buildExportMesh ? mesh.minSurfaceZ : minSurfaceZ,
   );
 
   const polylineMm = buildTrailLinePolyline(
@@ -162,12 +176,12 @@ export async function generateTerrainMain(
   );
   const printWidth = req.trailLineWidthMm ?? trailLineWidthMmForPrint(config);
   let trailMesh: TerrainMeshPayload | null = null;
-  if (polylineMm.length >= 2) {
+  if (buildExportMesh && polylineMm.length >= 2) {
     trailMesh = buildTrailLineMesh({
       polylineMm,
       widthMm: printWidth,
       depthMm: config.trail.trailDepthMm,
-      heightMm: surfaceForTrail,
+      heightMm,
       cols,
       rows,
       crop,
