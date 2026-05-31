@@ -213,6 +213,22 @@ function scheduleFitTrackInView(): void {
   });
 }
 
+function resetMapView(): void {
+  const map = mapInstance.value;
+  if (!map) return;
+
+  if (typeof map.setBearing === "function") {
+    map.setBearing(0);
+    config.value.mapCrop.mapBearingDeg = 0;
+  }
+
+  if (config.value.gpx.imported && config.value.gpx.bounds) {
+    scheduleFitTrackInView();
+  } else {
+    syncStoreFromMap();
+  }
+}
+
 /** Alt/Option + 拖拽：绕视窗中心旋转地图（遮罩保持固定） */
 function setupAltDragRotate(map: L.Map, container: HTMLElement): () => void {
   let rotating = false;
@@ -403,7 +419,11 @@ watch(
   },
 );
 
-defineExpose({ fitTrackInView: scheduleFitTrackInView, syncStoreFromMap });
+defineExpose({
+  fitTrackInView: scheduleFitTrackInView,
+  syncStoreFromMap,
+  resetMapView,
+});
 </script>
 
 <template>

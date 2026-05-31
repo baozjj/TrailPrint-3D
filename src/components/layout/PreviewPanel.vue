@@ -79,6 +79,10 @@ watch(
   },
 );
 
+function resetMapView(): void {
+  mapRef.value?.resetMapView();
+}
+
 async function openTerrainPreview(): Promise<void> {
   if (!config.value.gpx.imported) {
     ui.statusMessage = "请先导入 GPX 轨迹文件";
@@ -157,40 +161,63 @@ const canOpen3d = computed(() => config.value.gpx.imported);
       <div v-if="config.gpx.imported" class="preview__hint-bar">
         <span
           >拖动平移 · 滚轮缩放 · 白框=山体 · 黄框=托盘外缘 ·
-          刻字显示在黄框边带上 · 右上角可打开 3D 预览</span
+          刻字显示在黄框边带上 · 右上角可重置视图或打开 3D 预览</span
         >
       </div>
 
-      <button
-        type="button"
-        class="preview__3d-btn"
-        :disabled="!canOpen3d"
-        title="预览 3D 山体模型"
-        @click="openTerrainPreview"
-      >
-        <svg
-          class="preview__3d-btn-icon"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          aria-hidden="true"
+      <div v-if="config.gpx.imported" class="preview__top-actions">
+        <button
+          type="button"
+          class="preview__reset-btn"
+          aria-label="重置地图位置"
+          title="重置地图位置"
+          @click="resetMapView"
         >
-          <path
-            d="M12 3L2 9l10 6 10-6-10-6z"
+          <svg
+            class="preview__reset-btn-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
             stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M2 15l10 6 10-6M2 11l10 6 10-6"
-            stroke="currentColor"
-            stroke-width="1.75"
-            stroke-linejoin="round"
-          />
-        </svg>
-        3D 预览
-      </button>
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </button>
+        <button
+          type="button"
+          class="preview__3d-btn"
+          :disabled="!canOpen3d"
+          title="预览 3D 山体模型"
+          @click="openTerrainPreview"
+        >
+          <svg
+            class="preview__3d-btn-icon"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M12 3L2 9l10 6 10-6-10-6z"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linejoin="round"
+            />
+            <path
+              d="M2 15l10 6 10-6M2 11l10 6 10-6"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linejoin="round"
+            />
+          </svg>
+          3D 预览
+        </button>
+      </div>
 
       <div v-if="dragOver" class="preview__drop-overlay" />
     </div>
@@ -277,11 +304,47 @@ const canOpen3d = computed(() => config.value.gpx.imported);
   text-align: center;
 }
 
-.preview__3d-btn {
+.preview__top-actions {
   position: absolute;
   top: 16px;
   right: 16px;
   z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview__reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  color: var(--tp-text-primary);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+}
+
+.preview__reset-btn:hover {
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
+
+.preview__reset-btn-icon {
+  flex-shrink: 0;
+}
+
+.preview__3d-btn {
+  position: static;
   display: inline-flex;
   align-items: center;
   gap: 6px;
