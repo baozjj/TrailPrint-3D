@@ -20,31 +20,30 @@ const { openSections } = storeToRefs(ui)
     :open="openSections.assembly"
     @toggle="ui.toggleSection('assembly')"
   >
-    <div class="row">
-      <NumberField
-        v-model="config.assembly.trailToleranceMm"
-        label="轨迹槽公差"
-        suffix="mm"
-        :min="0"
-        :max="1"
-        :step="0.01"
-      />
-      <NumberField
-        v-model="config.assembly.trayToleranceMm"
-        label="底座槽公差"
-        suffix="mm"
-        :min="0"
-        :max="1"
-        :step="0.01"
-      />
-    </div>
-
     <div class="toggle-row">
       <span>启用免胶水磁吸装配</span>
       <IosToggle v-model="config.assembly.magnet.enabled" />
     </div>
 
     <template v-if="config.assembly.magnet.enabled">
+      <div class="row">
+        <NumberField
+          v-model="config.assembly.trailToleranceMm"
+          label="轨迹槽公差"
+          suffix="mm"
+          :min="0"
+          :max="1"
+          :step="0.01"
+        />
+        <NumberField
+          v-model="config.assembly.trayToleranceMm"
+          label="底座槽公差"
+          suffix="mm"
+          :min="0"
+          :max="1"
+          :step="0.01"
+        />
+      </div>
       <div class="row">
         <NumberField
           v-model="config.assembly.magnet.diameterMm"

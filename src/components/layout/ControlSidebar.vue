@@ -49,6 +49,8 @@ onUnmounted(() => {
 const { importing, importFromFile } = useGpxImport()
 
 const fileInput = ref<HTMLInputElement | null>(null)
+/** 上次导出详情默认收起，减少底部占用 */
+const exportDoneOpen = ref(false)
 
 function openGpxPicker(): void {
   if (!importing.value) fileInput.value?.click()
@@ -150,18 +152,40 @@ async function handleGenerate(): Promise<void> {
         v-if="lastExportZipPath && !generating"
         class="sidebar__export-done"
       >
-        <p class="sidebar__export-label">上次导出</p>
-        <p class="sidebar__export-path" :title="lastExportZipPath">
-          {{ exportFileName(lastExportZipPath) }}
-        </p>
-        <p class="sidebar__export-hint">{{ lastExportZipPath }}</p>
         <button
           type="button"
-          class="sidebar__reveal"
-          @click="revealLastExport"
+          class="sidebar__export-toggle"
+          :aria-expanded="exportDoneOpen"
+          @click="exportDoneOpen = !exportDoneOpen"
         >
-          在 Finder 中显示
+          <span class="sidebar__export-label">上次导出</span>
+          <span class="sidebar__export-path" :title="lastExportZipPath">
+            {{ exportFileName(lastExportZipPath) }}
+          </span>
+          <svg
+            class="sidebar__export-chevron"
+            :class="{ 'sidebar__export-chevron--open': exportDoneOpen }"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"
+          >
+            <path d="M6 9l6 6 6-6" />
+          </svg>
         </button>
+        <div v-show="exportDoneOpen" class="sidebar__export-details">
+          <p class="sidebar__export-hint">{{ lastExportZipPath }}</p>
+          <button
+            type="button"
+            class="sidebar__reveal"
+            @click="revealLastExport"
+          >
+            在 Finder 中显示
+          </button>
+        </div>
       </div>
       <p v-if="statusMessage" class="sidebar__status">
         <template v-if="generating && exportProgress > 0">
@@ -274,14 +298,23 @@ async function handleGenerate(): Promise<void> {
 
 .sidebar__export-done {
   margin-bottom: 10px;
-  padding: 10px 12px;
   border-radius: 10px;
   background: var(--tp-bg-input);
   border: 1px solid var(--tp-border);
+  overflow: hidden;
+}
+
+.sidebar__export-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
 }
 
 .sidebar__export-label {
-  margin: 0 0 4px;
+  flex-shrink: 0;
   font-size: 11px;
   font-weight: 600;
   color: var(--tp-text-secondary);
@@ -290,15 +323,32 @@ async function handleGenerate(): Promise<void> {
 }
 
 .sidebar__export-path {
-  margin: 0;
-  font-size: 14px;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.3;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__export-chevron {
+  flex-shrink: 0;
+  color: var(--tp-text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.sidebar__export-chevron--open {
+  transform: rotate(180deg);
+}
+
+.sidebar__export-details {
+  padding: 0 12px 10px;
 }
 
 .sidebar__export-hint {
-  margin: 4px 0 8px;
+  margin: 0 0 8px;
   font-size: 11px;
   color: var(--tp-text-secondary);
   line-height: 1.35;
