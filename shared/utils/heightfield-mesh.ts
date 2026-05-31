@@ -164,6 +164,128 @@ function buildPolarCircleMesh(
   };
 }
 
+/** 正多边形：沿轮廓同心环（无中心点），顶/底/侧壁水密 */
+function buildPolygonSolidMesh(
+  crop: TerrainCropRegion,
+  heightMm: ArrayLike<number>,
+  cols: number,
+  rows: number,
+  baseThicknessMm: number,
+  minSurface: number,
+): TerrainMeshPayload {
+  const poly = buildFootprintPolygonMm(crop);
+  if (!poly || poly.length < 3) {
+    return buildClippedGridMesh(
+      crop,
+      heightMm,
+      cols,
+      rows,
+      baseThicknessMm,
+      minSurface,
+    );
+  }
+
+  const bottomZ = -baseThicknessMm;
+  const span = Math.max(crop.widthMm, crop.heightMm, 20);
+  const stepMm = Math.max(span / Math.max(cols, rows), 0.35);
+
+  const outerRing: Vec2[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const p0 = poly[i]!;
+    const p1 = poly[(i + 1) % poly.length]!;
+    const edgeLen = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+    const segCount = Math.max(1, Math.ceil(edgeLen / stepMm));
+    for (let s = 0; s < segCount; s++) {
+      const t = s / segCount;
+      outerRing.push({
+        x: p0.x + (p1.x - p0.x) * t,
+        y: p0.y + (p1.y - p0.y) * t,
+      });
+    }
+  }
+  const nPerim = outerRing.length;
+  if (nPerim < 3) {
+    return buildClippedGridMesh(
+      crop,
+      heightMm,
+      cols,
+      rows,
+      baseThicknessMm,
+      minSurface,
+    );
+  }
+
+  const nRings = Math.max(2, rows);
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const topIdx: number[][] = [];
+  const botIdx: number[][] = [];
+
+  function push(x: number, y: number, z: number): number {
+    const i = positions.length / 3;
+    positions.push(x, y, z);
+    return i;
+  }
+
+  for (let ring = 0; ring < nRings; ring++) {
+    const scale = (ring + 1) / nRings;
+    topIdx[ring] = [];
+    botIdx[ring] = [];
+    for (let p = 0; p < nPerim; p++) {
+      const pt = outerRing[p]!;
+      const x = pt.x * scale;
+      const y = pt.y * scale;
+      const z = surfaceZ(x, y, heightMm, cols, rows, crop, minSurface);
+      topIdx[ring]![p] = push(x, y, z);
+      botIdx[ring]![p] = push(x, y, bottomZ);
+    }
+  }
+
+  for (let ring = 0; ring < nRings - 1; ring++) {
+    for (let p = 0; p < nPerim; p++) {
+      const p1 = (p + 1) % nPerim;
+      const tt0 = topIdx[ring]![p]!;
+      const tt1 = topIdx[ring]![p1]!;
+      const tt2 = topIdx[ring + 1]![p1]!;
+      const tt3 = topIdx[ring + 1]![p]!;
+      indices.push(tt0, tt1, tt3, tt1, tt2, tt3);
+
+      const bb0 = botIdx[ring]![p]!;
+      const bb1 = botIdx[ring]![p1]!;
+      const bb2 = botIdx[ring + 1]![p1]!;
+      const bb3 = botIdx[ring + 1]![p]!;
+      indices.push(bb0, bb3, bb1, bb1, bb3, bb2);
+    }
+  }
+
+  const tCenter = push(0, 0, surfaceZ(0, 0, heightMm, cols, rows, crop, minSurface));
+  const bCenter = push(0, 0, bottomZ);
+  for (let p = 0; p < nPerim; p++) {
+    const p1 = (p + 1) % nPerim;
+    indices.push(tCenter, topIdx[0]![p]!, topIdx[0]![p1]!);
+    indices.push(bCenter, botIdx[0]![p1]!, botIdx[0]![p]!);
+  }
+
+  const outer = nRings - 1;
+  for (let p = 0; p < nPerim; p++) {
+    const p1 = (p + 1) % nPerim;
+    const t0 = topIdx[outer]![p]!;
+    const t1 = topIdx[outer]![p1]!;
+    const b0 = botIdx[outer]![p]!;
+    const b1 = botIdx[outer]![p1]!;
+    indices.push(b0, b1, t1, b0, t1, t0);
+  }
+
+  return {
+    positions,
+    indices,
+    minSurfaceZ: minSurface,
+    bottomZ,
+    gridCols: cols,
+    gridRows: rows,
+  };
+}
+
 /** 矩形：规则方格，四角均在轮廓内 */
 function buildRectGridMesh(
   crop: TerrainCropRegion,
@@ -325,7 +447,7 @@ function buildClippedGridMesh(
 
 /**
  * 由 DEM 高度场生成封闭实心山体。
- * 圆盘用极坐标网格；矩形用满铺方格；其余形状裁剪方格。
+ * 圆盘用极坐标网格；矩形用满铺方格；正多边形裁剪方格并沿边封侧壁。
  */
 export function buildHeightfieldTerrainMesh(
   crop: TerrainCropRegion,
@@ -341,7 +463,7 @@ export function buildHeightfieldTerrainMesh(
   }
   if (!Number.isFinite(minSurface)) minSurface = 0;
 
-  if (crop.shape === "circle" || crop.shape === "polygon") {
+  if (crop.shape === "circle") {
     return buildPolarCircleMesh(
       crop,
       heightMm,
@@ -353,6 +475,16 @@ export function buildHeightfieldTerrainMesh(
   }
   if (crop.shape === "rectangle") {
     return buildRectGridMesh(
+      crop,
+      heightMm,
+      cols,
+      rows,
+      baseThicknessMm,
+      minSurface,
+    );
+  }
+  if (crop.shape === "polygon") {
+    return buildPolygonSolidMesh(
       crop,
       heightMm,
       cols,

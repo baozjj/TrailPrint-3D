@@ -1,13 +1,11 @@
 import type { MapCropConfig } from "../types/config";
-import { physicalFootprintMm } from "./crop-region";
 
 /**
- * 默认打印半径 80mm 时，遮罩约占视窗短边的比例。
- * 与 `physicalFootprintMm` 联动后，侧栏 mm 尺寸与地图遮罩、STL 一致。
+ * 地图中心遮罩约占视窗短边的比例（屏幕像素，与打印 mm 无关）。
+ * mm 尺寸见 `physicalFootprintMm`，仅用于 STL / DEM 导出比例。
  */
 export const MASK_FILL_RATIO = 0.34;
 
-const REF_CHARACTERISTIC_MM = 80;
 const MASK_MAX_FILL = 0.48;
 const MASK_MIN_FILL = 0.14;
 
@@ -21,19 +19,7 @@ export interface MaskScreenGeometry {
   vertices?: Array<{ x: number; y: number }>;
 }
 
-function characteristicMm(
-  mapCrop: MapCropConfig,
-  foot: ReturnType<typeof physicalFootprintMm>,
-): number {
-  if (mapCrop.shape === "circle") {
-    return foot.radiusMm ?? foot.widthMm / 2;
-  }
-  if (mapCrop.shape === "rectangle") {
-    return Math.max(foot.widthMm, foot.heightMm) / 2;
-  }
-  return foot.radiusMm ?? foot.widthMm / 2;
-}
-
+/** 固定屏幕尺寸的选区蒙版；矩形仅取长宽比，不随 mm 绝对值缩放 */
 export function buildMaskGeometry(
   mapCrop: MapCropConfig,
   canvasW: number,
@@ -42,9 +28,7 @@ export function buildMaskGeometry(
   const cx = canvasW / 2;
   const cy = canvasH / 2;
   const shortSide = Math.min(canvasW, canvasH);
-  const foot = physicalFootprintMm(mapCrop);
-  const scale = characteristicMm(mapCrop, foot) / REF_CHARACTERISTIC_MM;
-  let baseR = shortSide * MASK_FILL_RATIO * scale;
+  let baseR = shortSide * MASK_FILL_RATIO;
   baseR = Math.min(baseR, shortSide * MASK_MAX_FILL);
   baseR = Math.max(baseR, shortSide * MASK_MIN_FILL);
 
@@ -53,7 +37,7 @@ export function buildMaskGeometry(
   }
 
   if (mapCrop.shape === "rectangle") {
-    const ratio = foot.widthMm / Math.max(foot.heightMm, 1);
+    const ratio = mapCrop.lengthMm / Math.max(mapCrop.widthMm, 1);
     let hw: number;
     let hh: number;
     if (ratio >= 1) {

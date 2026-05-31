@@ -122,13 +122,17 @@ export function payloadToBufferGeometry(
     geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   }
 
-  const merged = mergeVertices(geometry, 0.02);
-  geometry.dispose();
-  merged.computeVertexNormals();
-  merged.normalizeNormals();
-  merged.computeBoundingBox();
-  merged.computeBoundingSphere();
-  return merged;
+  let result = geometry;
+  if (options?.crop?.shape !== "polygon") {
+    const mergeTol = options?.crop?.shape === "circle" ? 0.001 : 0.02;
+    result = mergeVertices(geometry, mergeTol);
+    geometry.dispose();
+  }
+  result.computeVertexNormals();
+  result.normalizeNormals();
+  result.computeBoundingBox();
+  result.computeBoundingSphere();
+  return result;
 }
 
 /** 在渲染进程由高度场重建山体（与主进程 STL 同源算法） */

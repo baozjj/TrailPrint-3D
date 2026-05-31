@@ -31,9 +31,16 @@ const crop: TerrainCropRegion = {
 
 const rectCrop: TerrainCropRegion = { ...crop, shape: "rectangle" };
 
+const hexCrop: TerrainCropRegion = {
+  ...crop,
+  shape: "polygon",
+  polygonSides: 6,
+};
+
 for (const [label, c] of [
   ["circle", crop],
   ["rectangle", rectCrop],
+  ["hexagon", hexCrop],
 ] as const) {
   const mesh = buildHeightfieldTerrainMesh(
     c,

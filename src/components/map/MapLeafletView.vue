@@ -378,11 +378,7 @@ watch(
 watch(
   () => [
     config.value.mapCrop.shape,
-    config.value.mapCrop.radiusMm,
-    config.value.mapCrop.lengthMm,
-    config.value.mapCrop.widthMm,
     config.value.mapCrop.polygonSides,
-    config.value.mapCrop.polygonSideLengthMm,
     config.value.tray.rimWidthMm,
     config.value.tray.borderTextByEdge,
     borderTextEnabled.value,
