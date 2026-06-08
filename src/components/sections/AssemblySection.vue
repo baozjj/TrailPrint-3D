@@ -1,7 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
+import {
+  resolveCircleMagnetCount,
+  resolveFootprintShape,
+  resolvePolygonMagnetCount,
+} from '@shared/utils/magnet-hole-layout'
 import AccordionSection from '@/components/ui/AccordionSection.vue'
 import IosToggle from '@/components/ui/IosToggle.vue'
 import NumberField from '@/components/ui/NumberField.vue'
@@ -11,6 +17,27 @@ const configStore = useConfigStore()
 const ui = useUiStore()
 const { config } = storeToRefs(configStore)
 const { openSections } = storeToRefs(ui)
+
+const magnetHoleCountHint = computed(() => {
+  const { mapCrop } = config.value
+  const { magnet } = config.value.assembly
+  const shape = resolveFootprintShape(mapCrop)
+  if (shape === 'circle') {
+    const n = resolveCircleMagnetCount(magnet)
+    return `圆形底座将均匀分布 ${n} 个磁铁孔。`
+  }
+  if (shape === 'polygon') {
+    const n = resolvePolygonMagnetCount(mapCrop.polygonSides)
+    return `正 ${n} 边形底座将在各顶点方向各打 1 孔（共 ${n} 个）。`
+  }
+  return '矩形底座在四角各打 1 孔（共 4 个）。'
+})
+
+const showCircleMagnetCount = computed(
+  () =>
+    config.value.assembly.magnet.enabled &&
+    resolveFootprintShape(config.value.mapCrop) === 'circle',
+)
 </script>
 
 <template>
@@ -66,6 +93,16 @@ const { openSections } = storeToRefs(ui)
           :step="0.5"
         />
       </div>
+      <NumberField
+        v-if="showCircleMagnetCount"
+        v-model="config.assembly.magnet.circleCount"
+        label="圆形磁铁孔数量"
+        suffix="个"
+        :min="2"
+        :max="12"
+        :step="1"
+      />
+      <p class="hint">{{ magnetHoleCountHint }}</p>
       <CheckboxField
         v-model="config.assembly.magnet.fridgeMagnetHole"
         label="底面展示孔（如冰箱贴）"

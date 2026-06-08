@@ -41,10 +41,20 @@ function ensureTrailConfigDefaults(cfg: AppConfig): void {
   }
 }
 
+function ensureMagnetConfigDefaults(cfg: AppConfig): void {
+  const magnet = cfg.assembly.magnet as AppConfig["assembly"]["magnet"] & {
+    circleCount?: number;
+  };
+  if (magnet.circleCount == null) {
+    magnet.circleCount = 3;
+  }
+}
+
 export const useConfigStore = defineStore("config", () => {
   const config = ref<AppConfig>(createDefaultConfig());
   applyOpenTopoApiKey(config.value);
   ensureTrailConfigDefaults(config.value);
+  ensureMagnetConfigDefaults(config.value);
 
   watch(
     () => config.value.terrain.openTopographyApiKey,
@@ -63,6 +73,7 @@ export const useConfigStore = defineStore("config", () => {
     config.value = createDefaultConfig();
     applyOpenTopoApiKey(config.value);
     ensureTrailConfigDefaults(config.value);
+    ensureMagnetConfigDefaults(config.value);
   }
 
   function patchConfig(partial: Partial<AppConfig>): void {

@@ -44,7 +44,7 @@ export async function generateTrayBase(
   );
 
   let mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
-  mesh = applyTrayMagnetHoles(mesh, config);
+  mesh = applyTrayMagnetHoles(mesh, config, footprint);
 
   return {
     mesh,
