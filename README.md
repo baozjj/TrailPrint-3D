@@ -8,6 +8,58 @@
 
 ---
 
+## 🚀 快速开始
+
+本项目为 **Electron + Vue 3** 桌面应用，使用 npm 管理依赖。
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) 18 或更高版本
+- npm（随 Node.js 安装）
+
+### 安装与启动
+
+```bash
+# 克隆仓库后进入项目目录
+cd TrailPrint-3D
+
+# 安装依赖
+npm install
+
+# 配置环境变量（见下方说明）
+cp .env.example .env
+
+# 启动开发模式（会打开 Electron 窗口）
+npm run dev
+```
+
+### 环境变量
+
+复制 `.env.example` 为 `.env`，并填入 [OpenTopography](https://portal.opentopography.org/requestService?service=api) API Key。地形高程数据依赖该服务：
+
+```bash
+OPENTOPOGRAPHY_API_KEY=你的密钥
+VITE_OPENTOPOGRAPHY_API_KEY=你的密钥
+```
+
+可选：高精度制版或自定义分辨率较大时，可提高 V8 堆内存上限（单位 MB，默认 8192）：
+
+```bash
+TRAILPRINT_HEAP_MB=8192
+```
+
+### 其他命令
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 开发模式，热更新 |
+| `npm run build` | 构建生产产物到 `out/` |
+| `npm run preview` | 预览构建后的应用 |
+| `npm run package` | 构建并打包为安装包（输出到 `release/`） |
+| `npm run typecheck` | TypeScript 类型检查 |
+
+---
+
 ## ✨ 核心功能亮点
 
 ### 🗺️ 1. 自由构图与地图裁剪
