@@ -7,6 +7,7 @@ import { useGpxImport } from '@/composables/useGpxImport'
 import { formatIpcError, ipcGenerateExport, ipcOnExportProgress, ipcRevealExport } from '@/ipc/client'
 import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import { physicalFootprintMm } from '@shared/utils/crop-region'
+import { ensureMapZoomFitsTrail } from '@shared/utils/trail-fit'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
@@ -78,11 +79,20 @@ async function handleGenerate(): Promise<void> {
   statusMessage.value = '准备生成…'
   ui.runPrepareExport()
   const { w, h } = ui.previewViewport
+  const vw = Math.round(w)
+  const vh = Math.round(h)
+  const snapshot = configStore.toSnapshot()
+  const exportConfig = ensureMapZoomFitsTrail(snapshot, vw, vh)
+  if (exportConfig.mapCrop.mapZoom !== snapshot.mapCrop.mapZoom) {
+    configStore.config.mapCrop.mapCenterLat = exportConfig.mapCrop.mapCenterLat
+    configStore.config.mapCrop.mapCenterLon = exportConfig.mapCrop.mapCenterLon
+    configStore.config.mapCrop.mapZoom = exportConfig.mapCrop.mapZoom
+  }
   try {
     const res = await ipcGenerateExport({
-      config: configStore.toSnapshot(),
-      viewportWidth: Math.round(w),
-      viewportHeight: Math.round(h),
+      config: exportConfig,
+      viewportWidth: vw,
+      viewportHeight: vh,
     })
     if (res.cancelled) {
       statusMessage.value =

@@ -15,10 +15,7 @@ import {
   minHeightFieldMm,
 } from "@shared/utils/heightfield-mesh";
 import { buildTrailLineMesh } from "./trail-line-mesh";
-import {
-  buildTrailGrooveSpec,
-  buildTrailLinePolyline,
-} from "./trail-pipeline";
+import { buildTrailGrooveSpec, buildTrailLinePolyline } from "./trail-pipeline";
 import { applyGrooveToHeightField } from "./trail-groove";
 import { applyTerrainSnapFitHoles } from "../assembly/apply-magnet-holes";
 import { imprintGrooveOnTerrainMesh } from "@shared/utils/trail-groove-imprint";
@@ -118,8 +115,9 @@ export async function generateTerrainMain(
   );
 
   const meshQuality = config.terrain.meshQuality ?? "high";
-  const meshQualityCustom =
-    config.terrain.meshQualityCustom ?? { maxGrid: 512 };
+  const meshQualityCustom = config.terrain.meshQualityCustom ?? {
+    maxGrid: 512,
+  };
   const { cols, rows } = gridResolutionForQuality(
     crop.widthMm,
     crop.heightMm,
@@ -195,13 +193,7 @@ export async function generateTerrainMain(
   const baseThicknessMm = config.terrain.baseSolidThicknessMm;
 
   let mesh: TerrainMeshPayload = buildExportMesh
-    ? buildHeightfieldTerrainMesh(
-        crop,
-        heightMm,
-        cols,
-        rows,
-        baseThicknessMm,
-      )
+    ? buildHeightfieldTerrainMesh(crop, heightMm, cols, rows, baseThicknessMm)
     : { ...EMPTY_TERRAIN_MESH, gridCols: cols, gridRows: rows };
 
   if (buildExportMesh) {
@@ -223,11 +215,12 @@ export async function generateTerrainMain(
     viewportWidth,
     viewportHeight,
   );
+  const trailPolylineMm = exportGroove?.polylineMm ?? polylineMm;
   const printWidth = req.trailLineWidthMm ?? trailLineWidthMmForPrint(config);
   let trailMesh: TerrainMeshPayload | null = null;
-  if (buildExportMesh && polylineMm.length >= 2) {
+  if (buildExportMesh && trailPolylineMm.length >= 2) {
     trailMesh = buildTrailLineMesh({
-      polylineMm,
+      polylineMm: trailPolylineMm,
       widthMm: printWidth,
       depthMm: trailLineDepthMmForPrint(config),
       heightMm: surfaceForTrail,

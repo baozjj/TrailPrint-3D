@@ -115,3 +115,14 @@ export function assertWatertightMesh(
     );
   }
 }
+
+/** 轨迹件：有实体即可导出 */
+export function assertTrailLineMesh(
+  mesh: TerrainMeshPayload,
+  label: string,
+): void {
+  const a = analyzeMesh(mesh);
+  if (a.triangles < 4) {
+    throw new Error(`${label} 三角面过少（${a.triangles}），无法导出`);
+  }
+}

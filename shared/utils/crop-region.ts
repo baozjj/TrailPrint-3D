@@ -54,7 +54,8 @@ function maskBoundaryPoints(
   return [{ x: mask.cx, y: mask.cy }];
 }
 
-function rotateScreenPoint(
+/** 将屏幕坐标绕视窗中心旋转；bearingDeg 与地图旋转角一致，内部取反以还原北向上投影 */
+export function rotateScreenPoint(
   x: number,
   y: number,
   cx: number,

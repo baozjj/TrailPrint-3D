@@ -95,6 +95,7 @@ export function useTerrainGeneration(
       config.value.trail.gpxSimplify,
       config.value.trail.trailWidthMm,
       config.value.trail.trailDepthMm,
+      config.value.trail.heightAboveMainMm,
       config.value.assembly.trailToleranceMm,
       config.value.assembly.magnet.enabled,
       config.value.assembly.magnet.diameterMm,

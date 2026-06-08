@@ -20,6 +20,12 @@ export interface BuildTrailLineOptions {
 }
 
 const MIN_SEGMENT_MM = 0.35;
+/** 轨迹挤出采样上限，避免超长 GPX 生成过多三角面 */
+const MAX_TRAIL_EXTRUSION_SAMPLES = 6000;
+
+type AddVertexFn = (x: number, y: number, z: number) => number;
+type AddTriFn = (i0: number, i1: number, i2: number) => void;
+type TrailSample = { x: number; y: number; zTop: number; zBot: number };
 
 /** 过短路径挤出会退化；保证首尾间距至少 minLen */
 function expandShortPath(path: TrailPointMm[], minLen: number): TrailPointMm[] {
@@ -58,33 +64,6 @@ function pathLengthMm(path: TrailPointMm[]): number {
     sum += Math.hypot(b.x - a.x, b.y - a.y);
   }
   return sum;
-}
-
-function closedPerimeterMm(path: TrailPointMm[]): number {
-  if (path.length < 2) return 0;
-  let sum = 0;
-  for (let i = 0; i < path.length; i++) {
-    const a = path[i]!;
-    const b = path[(i + 1) % path.length]!;
-    sum += Math.hypot(b.x - a.x, b.y - a.y);
-  }
-  return sum;
-}
-
-function scaleClosedPath(path: TrailPointMm[], scale: number): TrailPointMm[] {
-  if (path.length < 2 || Math.abs(scale - 1) < 1e-6) return path;
-  let cx = 0;
-  let cy = 0;
-  for (const p of path) {
-    cx += p.x;
-    cy += p.y;
-  }
-  cx /= path.length;
-  cy /= path.length;
-  return path.map((p) => ({
-    x: cx + (p.x - cx) * scale,
-    y: cy + (p.y - cy) * scale,
-  }));
 }
 
 function isClosedLoop(path: TrailPointMm[], tol: number): boolean {
@@ -137,38 +116,49 @@ function triArea2(
 
 /**
  * 沿轨迹挤出封闭带状实体（顶面贴 DEM，向下 depthMm），用于 Trail_Line.stl。
+ * 与主模型凹槽共用折线；失败时自动加大采样步长重试。
  */
 export function buildTrailLineMesh(
   opts: BuildTrailLineOptions,
 ): TerrainMeshPayload | null {
-  const { polylineMm, widthMm, depthMm, heightMm, cols, rows, crop } = opts;
-  if (polylineMm.length < 2 || widthMm <= 0 || depthMm <= 0) return null;
+  if (opts.polylineMm.length < 2 || opts.widthMm <= 0 || opts.depthMm <= 0) {
+    return null;
+  }
 
-  const step = Math.max(
+  const baseStep = Math.max(
+    MIN_SEGMENT_MM,
+    opts.sampleStepMm ?? opts.widthMm / 3,
+  );
+  let step = baseStep;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const mesh = buildTrailLineMeshOnce({ ...opts, sampleStepMm: step });
+    if (mesh) return mesh;
+    step *= 1.45;
+    if (step > 6) break;
+  }
+  return null;
+}
+
+function buildTrailLineMeshOnce(
+  opts: BuildTrailLineOptions,
+): TerrainMeshPayload | null {
+  const { polylineMm, widthMm, depthMm, heightMm, cols, rows, crop } = opts;
+  const requestedStep = Math.max(
     MIN_SEGMENT_MM,
     opts.sampleStepMm ?? widthMm / 3,
   );
-  const dedupeDist = Math.min(MIN_SEGMENT_MM, step * 0.85);
-  let path = resamplePolyline(polylineMm, step);
+  let path = prepareExtrusionPath(polylineMm, requestedStep);
+  const dedupeDist = Math.min(MIN_SEGMENT_MM, requestedStep * 0.85);
   path = dedupePath(path, dedupeDist);
-  if (path.length < 2 && polylineMm.length >= 2) {
-    path = dedupePath(polylineMm, dedupeDist);
-  }
   if (path.length < 2) return null;
 
-  const minPathLen = Math.max(widthMm * 1.25, step * 2, MIN_SEGMENT_MM * 3);
-  let closed = isClosedLoop(path, step * 0.75);
+  const minPathLen = Math.max(widthMm * 1.25, requestedStep * 2, MIN_SEGMENT_MM * 3);
+  let closed = isClosedLoop(path, requestedStep * 0.75);
   if (closed && path.length > 2) {
     path = path.slice(0, -1);
   }
 
-  if (closed) {
-    const perim = closedPerimeterMm(path);
-    const minPerim = minPathLen * 2;
-    if (perim > 1e-6 && perim < minPerim) {
-      path = scaleClosedPath(path, minPerim / perim);
-    }
-  } else {
+  if (!closed && path.length === 2 && pathLengthMm(path) < minPathLen) {
     path = expandShortPath(path, minPathLen);
   }
 
@@ -197,11 +187,53 @@ export function buildTrailLineMesh(
     indices.push(i0, i1, i2);
   }
 
-  const samples: Array<{ x: number; y: number; zTop: number; zBot: number }> =
-    [];
+  const samples = collectTrailSamples(path, opts, heightMm, cols, rows, crop, depthMm);
+  if (samples.length < 2) return null;
+
+  let zTopMin = Infinity;
+  let zBotMin = Infinity;
+  extrudeTrailRun({
+    run: samples,
+    closed,
+    halfW,
+    minDist2,
+    addVertex,
+    addTri,
+    positions,
+    indices,
+  });
+  for (const s of samples) {
+    if (s.zTop < zTopMin) zTopMin = s.zTop;
+    if (s.zBot < zBotMin) zBotMin = s.zBot;
+  }
+
+  if (indices.length < 12) return null;
+
+  return finalizeTrailMesh({
+    positions,
+    indices,
+    minSurfaceZ: zTopMin,
+    bottomZ: zBotMin,
+    gridCols: 0,
+    gridRows: 0,
+  });
+}
+
+function collectTrailSamples(
+  path: TrailPointMm[],
+  opts: BuildTrailLineOptions,
+  heightMm: Float64Array,
+  cols: number,
+  rows: number,
+  crop: TerrainCropRegion,
+  depthMm: number,
+): TrailSample[] {
+  const samples: TrailSample[] = [];
   const flatFloor = opts.flatFloorZMm;
   const useFlatFloor =
     flatFloor != null && Number.isFinite(flatFloor) && depthMm > 0;
+  const zOffset = opts.zTopOffsetMm ?? 0;
+  const minThicknessMm = Math.max(zOffset, 0.05);
 
   for (const p of path) {
     if (useFlatFloor) {
@@ -215,8 +247,7 @@ export function buildTrailLineMesh(
         crop,
         zBot,
       );
-      const zTop = zSurface + (opts.zTopOffsetMm ?? 0);
-      if (zTop <= zBot + 1e-4) continue;
+      const zTop = Math.max(zSurface + zOffset, zBot + minThicknessMm);
       samples.push({ x: p.x, y: p.y, zTop, zBot });
       continue;
     }
@@ -229,21 +260,45 @@ export function buildTrailLineMesh(
       crop,
       0,
     );
-    const zTop = zBase + (opts.zTopOffsetMm ?? 0);
+    const zTop = zBase + zOffset;
     samples.push({ x: p.x, y: p.y, zTop, zBot: zTop - depthMm });
   }
+  return samples;
+}
 
+function extrudeTrailRun(params: {
+  run: TrailSample[];
+  closed: boolean;
+  halfW: number;
+  minDist2: number;
+  addVertex: AddVertexFn;
+  addTri: AddTriFn;
+  positions: number[];
+  indices: number[];
+}): void {
+  const { run, closed, halfW, minDist2, addVertex, addTri, positions, indices } =
+    params;
   const topLeft: number[] = [];
   const topRight: number[] = [];
   const botLeft: number[] = [];
   const botRight: number[] = [];
 
-  for (let i = 0; i < samples.length; i++) {
-    const cur = samples[i]!;
-    const prev = samples[Math.max(0, i - 1)]!;
-    const next = samples[Math.min(samples.length - 1, i + 1)]!;
-    let dx = next.x - prev.x;
-    let dy = next.y - prev.y;
+  for (let i = 0; i < run.length; i++) {
+    const cur = run[i]!;
+    const prev = run[Math.max(0, i - 1)]!;
+    const next = run[Math.min(run.length - 1, i + 1)]!;
+    let dx: number;
+    let dy: number;
+    if (i === 0) {
+      dx = next.x - cur.x;
+      dy = next.y - cur.y;
+    } else if (i === run.length - 1) {
+      dx = cur.x - prev.x;
+      dy = cur.y - prev.y;
+    } else {
+      dx = next.x - prev.x;
+      dy = next.y - prev.y;
+    }
     if (dx * dx + dy * dy < minDist2) {
       dx = next.x - cur.x;
       dy = next.y - cur.y;
@@ -260,9 +315,9 @@ export function buildTrailLineMesh(
     botRight.push(addVertex(cur.x - nx * halfW, cur.y - ny * halfW, cur.zBot));
   }
 
-  const ringCount = closed ? samples.length : samples.length - 1;
+  const ringCount = closed ? run.length : run.length - 1;
   for (let i = 0; i < ringCount; i++) {
-    const j = (i + 1) % samples.length;
+    const j = (i + 1) % run.length;
     const tl0 = topLeft[i]!;
     const tr0 = topRight[i]!;
     const tl1 = topLeft[j]!;
@@ -293,7 +348,7 @@ export function buildTrailLineMesh(
       botLeft[0]!,
       true,
     );
-    const end = samples.length - 1;
+    const end = run.length - 1;
     addPlanarCap(
       addVertex,
       addTri,
@@ -305,23 +360,7 @@ export function buildTrailLineMesh(
       false,
     );
   }
-
-  const zTopMin = Math.min(...samples.map((s) => s.zTop));
-  const zBotMin = Math.min(...samples.map((s) => s.zBot));
-
-  if (indices.length < 12) {
-    return null;
-  }
-
-  return finalizeTrailMesh(
-    { positions, indices, minSurfaceZ: zTopMin, bottomZ: zBotMin, gridCols: 0, gridRows: 0 },
-    samples,
-    halfW,
-  );
 }
-
-type AddVertexFn = (x: number, y: number, z: number) => number;
-type AddTriFn = (i0: number, i1: number, i2: number) => void;
 
 /** 四边形端盖：绕中心扇形三角化，避免共面四点双三角退化 */
 function addPlanarCap(
@@ -362,73 +401,35 @@ function addPlanarCap(
   }
 }
 
-function buildTrailBoxMesh(
-  start: { x: number; y: number; zTop: number; zBot: number },
-  end: { x: number; y: number; zTop: number; zBot: number },
-  halfW: number,
-): TerrainMeshPayload {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const nx = (-dy / len) * halfW;
-  const ny = (dx / len) * halfW;
+function prepareExtrusionPath(
+  polylineMm: TrailPointMm[],
+  requestedStepMm: number,
+): TrailPointMm[] {
+  if (polylineMm.length < 2) return polylineMm.slice();
 
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const corners = [
-    [start.x + nx, start.y + ny, start.zTop],
-    [start.x - nx, start.y - ny, start.zTop],
-    [end.x - nx, end.y - ny, end.zTop],
-    [end.x + nx, end.y + ny, end.zTop],
-    [start.x + nx, start.y + ny, start.zBot],
-    [start.x - nx, start.y - ny, start.zBot],
-    [end.x - nx, end.y - ny, end.zBot],
-    [end.x + nx, end.y + ny, end.zBot],
-  ];
-  for (const c of corners) positions.push(c[0]!, c[1]!, c[2]!);
-
-  const t = [0, 1, 2, 0, 2, 3];
-  const b = [4, 6, 5, 4, 7, 6];
-  const s0 = [0, 4, 5, 0, 5, 1];
-  const s1 = [1, 5, 6, 1, 6, 2];
-  const s2 = [2, 6, 7, 2, 7, 3];
-  const s3 = [3, 7, 4, 3, 4, 0];
-  for (const face of [t, b, s0, s1, s2, s3]) {
-    indices.push(face[0]!, face[1]!, face[2]!, face[3]!, face[4]!, face[5]!);
+  let step = requestedStepMm;
+  let path = resamplePolyline(polylineMm, step);
+  while (path.length > MAX_TRAIL_EXTRUSION_SAMPLES && step < 6) {
+    step *= 1.35;
+    path = resamplePolyline(polylineMm, step);
   }
-
-  return {
-    positions,
-    indices,
-    minSurfaceZ: Math.min(start.zTop, end.zTop, start.zBot, end.zBot),
-    bottomZ: Math.min(start.zBot, end.zBot),
-    gridCols: 0,
-    gridRows: 0,
-  };
+  return path.length >= 2 ? path : polylineMm.slice();
 }
 
-function finalizeTrailMesh(
-  mesh: TerrainMeshPayload,
-  samples: Array<{ x: number; y: number; zTop: number; zBot: number }>,
-  halfW: number,
-): TerrainMeshPayload | null {
-  let out = weldMeshVertices(mesh, 0.03);
-  let check = analyzeMesh(out);
-  if (check.boundaryEdges === 0 && check.nonManifoldEdges === 0) return out;
-
-  if (samples.length >= 2) {
-    const box = buildTrailBoxMesh(
-      samples[0]!,
-      samples[samples.length - 1]!,
-      halfW,
-    );
-    out = weldMeshVertices(box, 0.03);
-    check = analyzeMesh(out);
-    if (check.boundaryEdges === 0 && check.nonManifoldEdges === 0) return out;
+function finalizeTrailMesh(mesh: TerrainMeshPayload): TerrainMeshPayload {
+  const rawCheck = analyzeMesh(mesh);
+  if (rawCheck.boundaryEdges === 0 && rawCheck.nonManifoldEdges === 0) {
+    return mesh;
   }
-
-  if (check.boundaryEdges === 0 && check.nonManifoldEdges === 0) return out;
-  return null;
+  if (rawCheck.nonManifoldEdges === 0) {
+    return mesh;
+  }
+  for (const toleranceMm of [0.03, 0.08, 0.15]) {
+    const welded = weldMeshVertices(mesh, toleranceMm);
+    const check = analyzeMesh(welded);
+    if (check.nonManifoldEdges === 0) return welded;
+  }
+  return mesh;
 }
 
 export function trailPathLengthMm(polylineMm: TrailPointMm[]): number {

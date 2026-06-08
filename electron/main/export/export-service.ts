@@ -16,7 +16,7 @@ import { IpcException } from "@shared/ipc/types";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import { generateTerrainMain } from "../terrain/terrain-main-service";
 import { generateTrayBase } from "../tray/tray-service";
-import { assertWatertightMesh } from "@shared/utils/mesh-manifold";
+import { assertTrailLineMesh, assertWatertightMesh } from "@shared/utils/mesh-manifold";
 import { writeBinaryStl } from "./stl-writer";
 import { packZip } from "./zip-packager";
 
@@ -97,12 +97,15 @@ export async function generateModelsZip(
   const trayRes = await generateTrayBase({ config });
 
   const trailPoints = config.gpx.points.length || config.gpx.rawPoints.length;
+  const trailPolylinePts = terrainWithGroove.trailPolylineMm?.length ?? 0;
   if (!terrainWithGroove.trailMesh) {
     throw new IpcException(
       "TRAIL_EMPTY",
       trailPoints < 2
         ? "GPX 轨迹点不足，请重新导入有效的 GPX 文件"
-        : `无法生成轨迹模型（已读取 ${trailPoints} 个轨迹点）。请在 2D 地图中将红色轨迹拖入中心圆/框内后再导出`,
+        : trailPolylinePts < 2
+          ? `无法生成轨迹模型（已读取 ${trailPoints} 个轨迹点，但投影进打印区的有效折线不足）。请在 2D 地图中将红色轨迹拖入中心白框内后再导出`
+          : `无法生成轨迹网格（打印区折线 ${trailPolylinePts} 点）。请尝试略增大轨迹宽度，或重置地图视图后重新导出`,
     );
   }
 
@@ -122,7 +125,7 @@ export async function generateModelsZip(
 
     assertWatertightMesh(terrainWithGroove.mesh, "Terrain_Main");
     if (terrainWithGroove.trailMesh) {
-      assertWatertightMesh(terrainWithGroove.trailMesh, "Trail_Line");
+      assertTrailLineMesh(terrainWithGroove.trailMesh, "Trail_Line");
     }
 
     await writeBinaryStl(terrainStl, terrainWithGroove.mesh, "Terrain_Main");
