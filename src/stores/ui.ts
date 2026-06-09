@@ -18,6 +18,8 @@ export const useUiStore = defineStore("ui", () => {
   const exportProgress = ref(0);
   /** 最近一次成功导出的 ZIP 绝对路径 */
   const lastExportZipPath = ref<string | null>(null);
+  /** 3D 模型预览弹窗 */
+  const terrainPreviewOpen = ref(false);
 
   const prepareExportHooks: Array<() => void> = [];
 
@@ -51,6 +53,7 @@ export const useUiStore = defineStore("ui", () => {
     requestGpxMapFit,
     exportProgress,
     lastExportZipPath,
+    terrainPreviewOpen,
     registerPrepareExportHook,
     runPrepareExport,
     toggleSection,

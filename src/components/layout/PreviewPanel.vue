@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
 import { useGpxImport } from "@/composables/useGpxImport";
+import { useStlExport } from "@/composables/useStlExport";
 import { useTerrainGeneration } from "@/composables/useTerrainGeneration";
 import { useTrayGeneration } from "@/composables/useTrayGeneration";
 import MapLeafletView from "@/components/map/MapLeafletView.vue";
@@ -19,8 +20,9 @@ const mapRef = ref<InstanceType<typeof MapLeafletView> | null>(null);
 const surfaceRef = ref<HTMLElement | null>(null);
 const viewport = ref({ w: 800, h: 600 });
 
-const terrainPreviewOpen = ref(false);
+const { terrainPreviewOpen } = storeToRefs(ui);
 const modalViewport = ref({ w: 960, h: 640 });
+const { generateAndSave, generating: exporting } = useStlExport();
 
 function syncViewportToStore(): void {
   ui.previewViewport = { ...viewport.value };
@@ -86,15 +88,6 @@ function resetMapView(): void {
   mapRef.value?.resetMapView();
 }
 
-async function openTerrainPreview(): Promise<void> {
-  if (!config.value.gpx.imported) {
-    ui.statusMessage = "请先导入 GPX 轨迹文件";
-    return;
-  }
-  ui.runPrepareExport();
-  terrainPreviewOpen.value = true;
-}
-
 function onTerrainModalOpened(): void {
   void regenerateTerrain();
 }
@@ -121,7 +114,9 @@ function onDragLeave(): void {
   dragOver.value = false;
 }
 
-const canOpen3d = computed(() => config.value.gpx.imported);
+async function onDownloadStl(): Promise<void> {
+  await generateAndSave();
+}
 </script>
 
 <template>
@@ -164,7 +159,7 @@ const canOpen3d = computed(() => config.value.gpx.imported);
       <div v-if="config.gpx.imported" class="preview__hint-bar">
         <span
           >拖动平移 · 滚轮缩放 · 白框=山体 · 黄框=托盘外缘 ·
-          右上角可重置视图或打开 3D 预览</span
+          右上角可重置视图</span
         >
       </div>
 
@@ -190,36 +185,6 @@ const canOpen3d = computed(() => config.value.gpx.imported);
             <polyline points="21 3 21 9 15 9" />
           </svg>
         </button>
-        <button
-          type="button"
-          class="preview__3d-btn"
-          :disabled="!canOpen3d"
-          title="预览 3D 山体模型"
-          @click="openTerrainPreview"
-        >
-          <svg
-            class="preview__3d-btn-icon"
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M12 3L2 9l10 6 10-6-10-6z"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linejoin="round"
-            />
-            <path
-              d="M2 15l10 6 10-6M2 11l10 6 10-6"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linejoin="round"
-            />
-          </svg>
-          3D 预览
-        </button>
       </div>
 
       <div v-if="dragOver" class="preview__drop-overlay" />
@@ -231,8 +196,10 @@ const canOpen3d = computed(() => config.value.gpx.imported);
       :result="terrainResult"
       :tray-mesh="trayMesh"
       :generating="terrainGenerating"
+      :downloading="exporting"
       :error="terrainError"
       @opened="onTerrainModalOpened"
+      @download="onDownloadStl"
     />
   </section>
 </template>
@@ -345,43 +312,6 @@ const canOpen3d = computed(() => config.value.gpx.imported);
 
 .preview__reset-btn-icon {
   flex-shrink: 0;
-}
-
-.preview__3d-btn {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--tp-text-primary);
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    box-shadow 0.15s,
-    opacity 0.15s;
-}
-
-.preview__3d-btn:hover:not(:disabled) {
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-}
-
-.preview__3d-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.preview__3d-btn-icon {
-  flex-shrink: 0;
-  color: var(--tp-text-accent);
 }
 
 .preview__drop-overlay {

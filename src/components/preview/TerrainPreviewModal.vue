@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import TerrainMeshPreview from "@/components/preview/TerrainMeshPreview.vue";
 import type { TerrainGenerateResponse } from "@shared/types/terrain";
 import type { TrayMeshPayload } from "@shared/types/tray";
@@ -9,16 +9,22 @@ const viewport = defineModel<{ w: number; h: number }>("viewport", {
   required: true,
 });
 
-defineProps<{
+const props = defineProps<{
   result: TerrainGenerateResponse | null;
   trayMesh: TrayMeshPayload | null;
   generating: boolean;
+  downloading: boolean;
   error: string | null;
 }>();
 
 const emit = defineEmits<{
   opened: [];
+  download: [];
 }>();
+
+const canDownload = computed(
+  () => !props.generating && !props.downloading && props.result != null && !props.error,
+);
 
 const bodyRef = ref<HTMLDivElement | null>(null);
 
@@ -80,21 +86,62 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             <h2 id="terrain-modal-title" class="terrain-modal__title">
               3D 模型预览
             </h2>
-            <button
-              type="button"
-              class="terrain-modal__close"
-              aria-label="关闭"
-              @click="open = false"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M6 6l12 12M18 6L6 18"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-              </svg>
-            </button>
+            <div class="terrain-modal__actions">
+              <button
+                type="button"
+                class="terrain-modal__download"
+                :disabled="!canDownload"
+                @click="emit('download')"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <polyline
+                    points="7 10 12 15 17 10"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                  <line
+                    x1="12"
+                    y1="15"
+                    x2="12"
+                    y2="3"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                {{ downloading ? "生成中…" : "下载" }}
+              </button>
+              <button
+                type="button"
+                class="terrain-modal__close"
+                aria-label="关闭"
+                @click="open = false"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </button>
+            </div>
           </header>
 
           <div ref="bodyRef" class="terrain-modal__body">
@@ -162,6 +209,37 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   font-size: 16px;
   font-weight: 600;
   color: var(--tp-text-primary);
+}
+
+.terrain-modal__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.terrain-modal__download {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 8px;
+  background: var(--tp-cta);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.terrain-modal__download:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.terrain-modal__download:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .terrain-modal__close {
