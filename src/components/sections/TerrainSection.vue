@@ -116,7 +116,7 @@ const demHint = computed(() => {
     />
     <RangeSlider
       v-model="config.terrain.zExaggeration"
-      label="地形起伏"
+      label="Z轴山体倍数"
       :min="1"
       :max="5"
       :step="0.1"

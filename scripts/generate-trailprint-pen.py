@@ -394,7 +394,7 @@ def build_document() -> dict:
         "2. 地形塑造",
         [
             input_field("模型基础厚度", "3.0"),
-            slider_row("地形起伏", "2.5x"),
+            slider_row("Z轴山体倍数", "2.5x"),
             {
                 "type": "frame",
                 "id": nid(),
