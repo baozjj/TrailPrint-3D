@@ -36,7 +36,7 @@ function scaleVerts(verts: Vec2[], scale: number): Vec2[] {
 
 /**
  * 托盘外廓 = 地形打印轮廓外扩 rim；凹槽 = 地形轮廓外扩 trayTolerance。
- * 磁铁孔、边框文字、托盘网格均以此轮廓为唯一几何来源。
+ * 磁铁孔、托盘网格均以此轮廓为唯一几何来源。
  */
 export function computeTrayFootprint(config: AppConfig): TrayFootprint {
   const { mapCrop, tray, assembly } = config;

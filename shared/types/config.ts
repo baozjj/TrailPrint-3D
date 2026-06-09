@@ -69,33 +69,12 @@ export interface TrailConfig {
   heightAboveMainMm: number;
 }
 
-// ─── 模块四：托盘底座与文字 ───────────────────────────────────────────
-
-export type TextAlign = "left" | "center" | "right";
-export type EngraveStyle = "intaglio" | "relief";
-/** 刻字朝向：朝外=从托盘外侧可读；朝内=朝向山体中心可读 */
-export type TextFacing = "inward" | "outward";
-
-export interface BorderTextEdge {
-  content: string;
-  /** 沿边对齐（切向）；默认居中 */
-  align: TextAlign;
-  style: EngraveStyle;
-  fontId: string;
-  /** 字号 (mm) */
-  fontSizeMm: number;
-  /** 朝内 / 朝外 */
-  facing: TextFacing;
-  /** 法向偏移 (mm)，相对边框带厚度中线，正=朝外；0=垂直居中 */
-  centerOffsetMm: number;
-}
+// ─── 模块四：托盘底座 ─────────────────────────────────────────────────
 
 export interface TrayConfig {
   totalThicknessMm: number;
   recessDepthMm: number;
   rimWidthMm: number;
-  /** 矩形 4 边 / 正多边形 N 边，任务-05 按形状联动 */
-  borderTextByEdge: BorderTextEdge[];
 }
 
 // ─── 模块五：打印装配与磁铁 ───────────────────────────────────────────
@@ -197,7 +176,6 @@ export function createDefaultConfig(): AppConfig {
       totalThicknessMm: 8,
       recessDepthMm: 5,
       rimWidthMm: 6,
-      borderTextByEdge: [],
     },
     assembly: {
       trailToleranceMm: 0.15,

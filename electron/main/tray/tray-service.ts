@@ -12,8 +12,6 @@ import {
 import { IpcException } from "@shared/ipc/types";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
 import { buildTrayBaseMeshCsg } from "./tray-csg-mesh";
-import { buildBorderTextMeshes } from "./border-text-mesh";
-import { mergeMeshPayloads } from "./mesh-merge";
 
 export async function generateTrayBase(
   req: TrayGenerateRequest,
@@ -52,7 +50,7 @@ export async function generateTrayBase(
     ? computeTrayBottomMagnetHoles(config, footprint)
     : [];
 
-  const base = buildTrayBaseMeshCsg(
+  const mesh = buildTrayBaseMeshCsg(
     footprint,
     config.tray,
     config.assembly.magnet.enabled
@@ -62,17 +60,6 @@ export async function generateTrayBase(
           depthMm: Math.max(0.5, config.assembly.magnet.thicknessMm),
         }
       : undefined,
-  );
-  const borderTextEnabled =
-    config.mapCrop.shape !== "circle" &&
-    config.tray.borderTextByEdge.some((e) => e.content.trim().length > 0);
-
-  const textMesh = await buildBorderTextMeshes(
-    footprint,
-    config.mapCrop.shape,
-    config.tray.borderTextByEdge,
-    config.tray.totalThicknessMm,
-    borderTextEnabled,
   );
 
   if (config.assembly.magnet.enabled) {
@@ -110,11 +97,8 @@ export async function generateTrayBase(
     }
   }
 
-  const mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
-
   return {
     mesh,
     generationMs: Date.now() - started,
-    hasBorderText: Boolean(textMesh),
   };
 }

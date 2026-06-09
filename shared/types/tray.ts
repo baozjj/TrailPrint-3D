@@ -11,8 +11,6 @@ export interface TrayGenerateRequest {
 export interface TrayGenerateResponse {
   mesh: TrayMeshPayload;
   generationMs: number;
-  /** 是否包含边框文字几何 */
-  hasBorderText: boolean;
 }
 
 export interface TrayValidationResult {

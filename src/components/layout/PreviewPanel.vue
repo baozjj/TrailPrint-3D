@@ -164,7 +164,7 @@ const canOpen3d = computed(() => config.value.gpx.imported);
       <div v-if="config.gpx.imported" class="preview__hint-bar">
         <span
           >拖动平移 · 滚轮缩放 · 白框=山体 · 黄框=托盘外缘 ·
-          刻字显示在黄框边带上 · 右上角可重置视图或打开 3D 预览</span
+          右上角可重置视图或打开 3D 预览</span
         >
       </div>
 

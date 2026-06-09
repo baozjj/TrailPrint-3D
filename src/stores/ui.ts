@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { EngraveStyle } from "@shared/types";
 
 export const useUiStore = defineStore("ui", () => {
   const openSections = ref<Record<string, boolean>>({
@@ -10,8 +9,6 @@ export const useUiStore = defineStore("ui", () => {
     tray: true,
     assembly: false,
   });
-  const borderTextEnabled = ref(false);
-  const globalEngraveStyle = ref<EngraveStyle>("intaglio");
   const generating = ref(false);
   const statusMessage = ref<string | null>(null);
   /** 预览区像素尺寸，供 STL 导出裁剪与预览一致 */
@@ -47,8 +44,6 @@ export const useUiStore = defineStore("ui", () => {
 
   return {
     openSections,
-    borderTextEnabled,
-    globalEngraveStyle,
     generating,
     statusMessage,
     previewViewport,

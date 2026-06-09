@@ -35,6 +35,6 @@ src/               Vue 3 渲染进程、stores、ipc 客户端
 - GPX 解析：主进程 handler + `TaskKind 'gpx-parse'`
 - 配置快照：`useConfigStore().toSnapshot()` 经 IPC 传给主进程
 - Terrain_Main / Trail_Line：`terrain:generate` IPC + `electron/main/terrain/`；挖槽与轨迹见 `trail-groove.ts`、`trail-line-mesh.ts`；贴合规则见 `docs/trail-projection.md`
-- Tray_Base：`tray:generate` IPC + `electron/main/tray/`；字体清单见 `shared/tray/font-catalog.ts`、`assets/fonts/README.md`
+- Tray_Base：`tray:generate` IPC + `electron/main/tray/`（CSG 托盘 + 磁铁孔）
 - 装配公差与磁铁孔：`config.assembly` → `trail-pipeline` / `tray-footprint` / `electron/main/assembly/`（圆柱布尔减）
 - STL/ZIP：`export:generate` IPC + `electron/main/export/`（二进制 STL、`archiver` ZIP、保存对话框）

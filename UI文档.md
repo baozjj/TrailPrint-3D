@@ -57,10 +57,9 @@ Please build a layout with two main areas:
 - GPX 数据优化: iOS Toggle switch with label "过滤噪点，平滑轨迹".
 - 轨迹宽度 & 轨迹深度: Two side-by-side numerical inputs with "mm" suffix.
 
-**4. 托盘底座与刻字 (Section 4)**
+**4. 托盘底座 (Section 4)**
 
 - 底座尺寸: Stacked inputs for "总厚度", "下陷深度", and "边框宽度".
-- 边框刻字: Toggle "启用边框刻字". If ON, show text inputs for each edge (上/下/左/右), and a toggle for "阴刻(凹) / 阳刻(凸)". _Add a subtle note: "仅支持矩形与多边形"._
 
 **5. 装配与磁铁 (Section 5 - Advanced, default collapsed)**
 

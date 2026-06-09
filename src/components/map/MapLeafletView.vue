@@ -22,7 +22,6 @@ const configStore = useConfigStore();
 const ui = useUiStore();
 const { config } = storeToRefs(configStore);
 const { gpxMapFitNonce } = storeToRefs(ui);
-const { borderTextEnabled } = storeToRefs(ui);
 const { effectivePoints } = useTrailPoints();
 
 const mapWrap = ref<HTMLDivElement | null>(null);
@@ -102,7 +101,6 @@ const trayOverlay = computed(() => {
     config.value.tray,
     maskW.value,
     maskH.value,
-    borderTextEnabled.value,
   );
 });
 
@@ -138,8 +136,6 @@ const trayPolygonOutline = computed(() => {
   if (!t || t.outer.kind !== "polygon") return "";
   return trayOuterPolygonPoints(t);
 });
-
-const rimTextItems = computed(() => trayOverlay.value?.rimTexts ?? []);
 
 function syncStoreFromMap(): void {
   const map = mapInstance.value;
@@ -396,8 +392,6 @@ watch(
     config.value.mapCrop.shape,
     config.value.mapCrop.polygonSides,
     config.value.tray.rimWidthMm,
-    config.value.tray.borderTextByEdge,
-    borderTextEnabled.value,
   ],
   () => {
     updateMaskLayout();
@@ -457,17 +451,6 @@ defineExpose({
           stroke-dasharray="8 5"
         />
       </svg>
-      <span
-        v-for="(item, idx) in rimTextItems"
-        :key="idx"
-        class="rim-text"
-        :style="{
-          left: `${item.x}px`,
-          top: `${item.y}px`,
-          transform: item.transform,
-          fontSize: `${item.fontSizePx}px`,
-        }"
-      >{{ item.text }}</span>
       <div class="mask-legend">
         <span class="mask-legend__item mask-legend__item--terrain">白框 · 山体范围</span>
         <span class="mask-legend__item mask-legend__item--tray">黄框 · 托盘外缘</span>
@@ -519,25 +502,6 @@ defineExpose({
 
 :deep(.mask-tray-stroke) {
   stroke: rgba(255, 193, 7, 0.95);
-}
-
-.rim-text {
-  position: absolute;
-  z-index: 3;
-  max-width: 42%;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  pointer-events: none;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 }
 
 .mask-legend {

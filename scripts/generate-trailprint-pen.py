@@ -428,36 +428,11 @@ def build_document() -> dict:
     )
 
     sec4 = accordion_section(
-        "4. 托盘底座与刻字",
+        "4. 托盘底座",
         [
             input_field("总厚度", "4.0"),
             input_field("下陷深度", "2.0"),
             input_field("边框宽度", "8.0"),
-            toggle_row("启用边框刻字", True),
-            {
-                "type": "frame",
-                "id": nid(),
-                "layout": "horizontal",
-                "width": "fill_container",
-                "gap": 8,
-                "children": [
-                    input_field("上", "2024.05.22", suffix=""),
-                    input_field("下", "华山论剑", suffix=""),
-                ],
-            },
-            {
-                "type": "frame",
-                "id": nid(),
-                "layout": "horizontal",
-                "width": "fill_container",
-                "gap": 8,
-                "children": [
-                    input_field("左", "15.2 km", suffix=""),
-                    input_field("右", "海拔 2154m", suffix=""),
-                ],
-            },
-            segmented_control(["阴刻(凹)", "阳刻(凸)"], 0),
-            text_node("仅支持矩形与多边形", size=11, fill="#86868B", growth="fixed-width", width="fill_container"),
         ],
     )
 
