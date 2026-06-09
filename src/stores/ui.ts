@@ -7,7 +7,7 @@ export const useUiStore = defineStore("ui", () => {
     terrain: true,
     trail: true,
     tray: true,
-    assembly: false,
+    assembly: true,
   });
   const generating = ref(false);
   const statusMessage = ref<string | null>(null);
