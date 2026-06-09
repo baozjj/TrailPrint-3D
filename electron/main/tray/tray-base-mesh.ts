@@ -1,6 +1,6 @@
 import type { TrayConfig } from "@shared/types";
 import type { TerrainMeshPayload } from "@shared/types/terrain";
-import type { TrayFootprint, Vec2 } from "./tray-footprint";
+import type { TrayFootprint, Vec2 } from "@shared/utils/tray-footprint";
 
 function triangulateFan(verts: Vec2[], reverse = false): number[] {
   const indices: number[] = [];

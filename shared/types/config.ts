@@ -106,8 +106,6 @@ export interface MagnetConfig {
   thicknessMm: number;
   /** 圆形底座磁铁孔数量（仅 shape===circle 时生效，默认 3，范围 2～12） */
   circleCount: number;
-  fridgeMagnetHole: boolean;
-  snapFitHole: boolean;
 }
 
 export interface AssemblyConfig {
@@ -209,8 +207,6 @@ export function createDefaultConfig(): AppConfig {
         diameterMm: 6,
         thicknessMm: 2,
         circleCount: 3,
-        fridgeMagnetHole: false,
-        snapFitHole: false,
       },
     },
   };

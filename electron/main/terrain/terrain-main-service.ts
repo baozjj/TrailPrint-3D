@@ -17,7 +17,6 @@ import {
 import { buildTrailLineMesh } from "./trail-line-mesh";
 import { buildTrailGrooveSpec, buildTrailLinePolyline } from "./trail-pipeline";
 import { applyGrooveToHeightField } from "./trail-groove";
-import { applyTerrainSnapFitHoles } from "../assembly/apply-magnet-holes";
 import { imprintGrooveOnTerrainMesh } from "@shared/utils/trail-groove-imprint";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import {
@@ -198,7 +197,6 @@ export async function generateTerrainMain(
 
   if (buildExportMesh) {
     mesh = imprintGrooveOnTerrainMesh(mesh, exportGroove);
-    mesh = applyTerrainSnapFitHoles(mesh, config);
   }
 
   const heightPreview = heightPreviewFromField(

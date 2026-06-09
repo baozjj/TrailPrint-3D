@@ -1,6 +1,6 @@
 import type { BaseShape, BorderTextEdge, TextFacing } from "@shared/types";
 import type { TerrainMeshPayload } from "@shared/types/terrain";
-import type { TrayFootprint, Vec2 } from "./tray-footprint";
+import type { TrayFootprint, Vec2 } from "@shared/utils/tray-footprint";
 import { layoutCharacterStrokes } from "./border-text-glyphs";
 import {
   alongOffsetMm,

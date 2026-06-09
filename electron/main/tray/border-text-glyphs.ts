@@ -1,4 +1,4 @@
-import type { Vec2 } from "./tray-footprint";
+import type { Vec2 } from "@shared/utils/tray-footprint";
 
 /** 5×7 点阵笔画（ASCII 子集）；其余字符用矩形轮廓回退 */
 const ASCII_STROKES: Record<string, number[][]> = {

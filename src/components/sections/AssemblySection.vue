@@ -3,40 +3,35 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
-import {
-  resolveCircleMagnetCount,
-  resolveFootprintShape,
-  resolvePolygonMagnetCount,
-} from '@shared/utils/magnet-hole-layout'
+import { trayMagnetHoleCount } from '@shared/utils/magnet-hole-layout'
+import { computeTrayFootprint } from '@shared/utils/tray-footprint'
 import AccordionSection from '@/components/ui/AccordionSection.vue'
 import IosToggle from '@/components/ui/IosToggle.vue'
 import NumberField from '@/components/ui/NumberField.vue'
-import CheckboxField from '@/components/ui/CheckboxField.vue'
 
 const configStore = useConfigStore()
 const ui = useUiStore()
 const { config } = storeToRefs(configStore)
 const { openSections } = storeToRefs(ui)
 
+const trayFootprint = computed(() => computeTrayFootprint(config.value))
+
 const magnetHoleCountHint = computed(() => {
-  const { mapCrop } = config.value
-  const { magnet } = config.value.assembly
-  const shape = resolveFootprintShape(mapCrop)
-  if (shape === 'circle') {
-    const n = resolveCircleMagnetCount(magnet)
-    return `圆形底座将均匀分布 ${n} 个磁铁孔。`
+  const footprint = trayFootprint.value
+  const n = trayMagnetHoleCount(config.value, footprint)
+  if (footprint.shape === 'circle') {
+    return `圆形托盘底面将均匀分布 ${n} 个磁铁孔。`
   }
-  if (shape === 'polygon') {
-    const n = resolvePolygonMagnetCount(mapCrop.polygonSides)
-    return `正 ${n} 边形底座将在各顶点方向各打 1 孔（共 ${n} 个）。`
+  if (footprint.shape === 'polygon') {
+    return `正 ${footprint.outer.length} 边形托盘底面将在各顶点各打 1 孔（共 ${n} 个）。`
   }
-  return '矩形底座在四角各打 1 孔（共 4 个）。'
+  return '矩形托盘底面在四角各打 1 孔（共 4 个）。'
 })
 
 const showCircleMagnetCount = computed(
   () =>
     config.value.assembly.magnet.enabled &&
-    resolveFootprintShape(config.value.mapCrop) === 'circle',
+    trayFootprint.value.shape === 'circle',
 )
 </script>
 
@@ -67,14 +62,12 @@ const showCircleMagnetCount = computed(
     </div>
 
     <div class="toggle-row">
-      <span>启用免胶水磁吸装配</span>
+      <span>底部磁铁孔</span>
       <IosToggle v-model="config.assembly.magnet.enabled" />
     </div>
 
     <template v-if="config.assembly.magnet.enabled">
-      <p class="hint">
-        请勾选下方孔位类型，否则不会生成磁铁孔。拼接孔会打在主模型底面与托盘凹槽底面。
-      </p>
+      <p class="hint">开启后在托盘底面生成磁铁孔，用于嵌入磁铁。</p>
       <div class="row">
         <NumberField
           v-model="config.assembly.magnet.diameterMm"
@@ -88,7 +81,7 @@ const showCircleMagnetCount = computed(
           v-model="config.assembly.magnet.thicknessMm"
           label="磁铁厚度"
           suffix="mm"
-          :min="1"
+          :min="0.5"
           :max="10"
           :step="0.5"
         />
@@ -96,21 +89,12 @@ const showCircleMagnetCount = computed(
       <NumberField
         v-if="showCircleMagnetCount"
         v-model="config.assembly.magnet.circleCount"
-        label="圆形磁铁孔数量"
-        suffix="个"
+        label="圆形孔数"
         :min="2"
         :max="12"
         :step="1"
       />
       <p class="hint">{{ magnetHoleCountHint }}</p>
-      <CheckboxField
-        v-model="config.assembly.magnet.fridgeMagnetHole"
-        label="底面展示孔（如冰箱贴）"
-      />
-      <CheckboxField
-        v-model="config.assembly.magnet.snapFitHole"
-        label="模型拼接定位孔"
-      />
     </template>
   </AccordionSection>
 </template>
@@ -119,19 +103,24 @@ const showCircleMagnetCount = computed(
 .row {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 120px;
 }
 
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-size: 14px;
+  padding: 4px 0;
 }
 
 .hint {
-  margin: 8px 0 0;
   font-size: 12px;
-  line-height: 1.45;
-  color: var(--color-text-secondary, #888);
+  color: var(--tp-text-secondary);
+  margin: 0;
 }
 </style>

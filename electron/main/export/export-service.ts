@@ -12,6 +12,12 @@ import {
 import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
 import { trailLineWidthMmForPrint } from "@shared/utils/footprint";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
+import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
+import {
+  logMagnetDebug,
+  magnetDebugSummary,
+} from "@shared/utils/magnet-debug-log";
+import { computeTrayFootprint } from "@shared/utils/tray-footprint";
 import { IpcException } from "@shared/ipc/types";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import { generateTerrainMain } from "../terrain/terrain-main-service";
@@ -93,6 +99,31 @@ export async function generateModelsZip(
     progress: 0.45,
     message: "正在生成托盘底座…",
   });
+
+  const trayFootprint = computeTrayFootprint(config);
+  if (config.assembly.magnet.enabled) {
+    const previewHoles = computeTrayBottomMagnetHoles(config, trayFootprint);
+    const summary = magnetDebugSummary({
+      phase: "export-preview",
+      mapCropShape: config.mapCrop.shape,
+      polygonSides: config.mapCrop.polygonSides,
+      footprintShape: trayFootprint.shape,
+      outerVertCount: trayFootprint.outer.length,
+      holeCount: previewHoles.length,
+    });
+    logMagnetDebug({
+      phase: "export",
+      mapCropShape: config.mapCrop.shape,
+      polygonSides: config.mapCrop.polygonSides,
+      footprintShape: trayFootprint.shape,
+      outerVertCount: trayFootprint.outer.length,
+      magnetEnabled: true,
+      circleCount: config.assembly.magnet.circleCount,
+      holeCount: previewHoles.length,
+      holes: previewHoles,
+      note: summary,
+    });
+  }
 
   const trayRes = await generateTrayBase({ config });
 

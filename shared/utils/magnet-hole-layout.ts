@@ -1,24 +1,10 @@
 import type { AppConfig, BaseShape, MagnetConfig } from "../types/config";
-import { physicalFootprintMm } from "./crop-region";
+import type { TrayFootprint } from "./tray-footprint";
 
-/** 磁铁孔中心 (mm)，与 Terrain_Main / Tray_Base 共用模型平面原点 */
+/** 磁铁孔中心 (mm)，与 Tray_Base 共用模型平面原点 */
 export interface MagnetHole2D {
   x: number;
   y: number;
-}
-
-export interface MagnetHoleLayout {
-  /** 拼接定位孔：主模型底面 + 托盘凹槽底面配对 */
-  snapFit: MagnetHole2D[];
-  /** 冰箱贴孔：托盘最底面 */
-  fridge: MagnetHole2D[];
-}
-
-/** 与托盘外轮廓对齐的形状提示（导出时由 computeTrayFootprint 提供） */
-export interface MagnetLayoutOptions {
-  footprintShape?: BaseShape;
-  /** 正多边形外轮廓顶点数（六边形 = 6） */
-  polygonVertexCount?: number;
 }
 
 const POLYGON_SIDES_MIN = 3;
@@ -30,14 +16,8 @@ const CIRCLE_COUNT_DEFAULT = 3;
 /** 顶点对齐相位：第一个孔位于 +Y（模型平面「上方」） */
 const TOP_VERTEX_PHASE = -Math.PI / 2;
 
-/** 沿顶点径向内缩，避免孔心过于贴近外轮廓（Bambu Studio 布尔后薄壁/破面） */
-const SNAP_FIT_INSET = {
-  circle: 0.55,
-  polygon: 0.88,
-  rectangle: 0.88,
-} as const;
-
-const FRIDGE_INSET = {
+/** 孔心沿托盘外轮廓径向内缩，避免贴边过薄 */
+const BOTTOM_INSET = {
   circle: 0.72,
   polygon: 0.72,
   rectangle: 0.72,
@@ -71,34 +51,6 @@ export function resolveCircleMagnetCount(magnet: MagnetConfig): number {
   );
 }
 
-/** 按底座形状解析磁铁孔数量（矩形恒为 4） */
-export function resolveMagnetHoleCount(
-  shape: BaseShape,
-  magnet: MagnetConfig,
-  polygonSides: number,
-): number {
-  if (shape === "rectangle") return 4;
-  if (shape === "polygon") return resolvePolygonMagnetCount(polygonSides);
-  return resolveCircleMagnetCount(magnet);
-}
-
-function resolveLayoutShape(
-  mapCrop: AppConfig["mapCrop"],
-  options?: MagnetLayoutOptions,
-): BaseShape {
-  return options?.footprintShape ?? resolveFootprintShape(mapCrop);
-}
-
-function resolveLayoutPolygonSides(
-  mapCrop: AppConfig["mapCrop"],
-  options?: MagnetLayoutOptions,
-): number {
-  if (options?.polygonVertexCount != null) {
-    return resolvePolygonMagnetCount(options.polygonVertexCount);
-  }
-  return resolvePolygonMagnetCount(mapCrop.polygonSides);
-}
-
 function evenlySpacedAngles(count: number, phase = TOP_VERTEX_PHASE): number[] {
   return Array.from(
     { length: count },
@@ -125,18 +77,6 @@ function layoutOnCircle(
   );
 }
 
-function layoutOnPolygon(
-  sides: number,
-  circumRadiusMm: number,
-  radialInset: number,
-): MagnetHole2D[] {
-  const n = resolvePolygonMagnetCount(sides);
-  return polarPositions(
-    circumRadiusMm * radialInset,
-    evenlySpacedAngles(n),
-  );
-}
-
 function layoutOnRectangle(
   halfWidthMm: number,
   halfHeightMm: number,
@@ -152,110 +92,76 @@ function layoutOnRectangle(
   ];
 }
 
-function snapFitHoles(
-  shape: BaseShape,
-  terrainR: number,
-  terrainHw: number,
-  terrainHh: number,
-  polygonSides: number,
-  circleCount: number,
+function layoutOnOuterVerts(
+  verts: ReadonlyArray<{ x: number; y: number }>,
+  inset: number,
 ): MagnetHole2D[] {
-  switch (shape) {
-    case "circle":
-      return layoutOnCircle(circleCount, terrainR, SNAP_FIT_INSET.circle);
-    case "polygon":
-      return layoutOnPolygon(
-        polygonSides,
-        terrainR,
-        SNAP_FIT_INSET.polygon,
-      );
-    default:
-      return layoutOnRectangle(terrainHw, terrainHh, SNAP_FIT_INSET.rectangle);
-  }
+  return verts.map((v) => ({ x: v.x * inset, y: v.y * inset }));
 }
 
-function fridgeHoles(
-  shape: BaseShape,
-  outerR: number,
-  outerHw: number,
-  outerHh: number,
-  polygonSides: number,
-  circleCount: number,
-): MagnetHole2D[] {
-  switch (shape) {
-    case "circle":
-      return layoutOnCircle(
-        circleCount,
-        outerR,
-        FRIDGE_INSET.circle,
-        TOP_VERTEX_PHASE + Math.PI / circleCount,
-      );
-    case "polygon":
-      return layoutOnPolygon(
-        polygonSides,
-        outerR,
-        FRIDGE_INSET.polygon,
-      );
-    default:
-      return layoutOnRectangle(outerHw, outerHh, FRIDGE_INSET.rectangle);
+function meanRadius(outer: ReadonlyArray<{ x: number; y: number }>): number {
+  if (!outer.length) return 0;
+  let sum = 0;
+  for (const v of outer) {
+    sum += Math.hypot(v.x, v.y);
   }
+  return sum / outer.length;
 }
 
 /**
- * 根据装配配置计算磁铁孔 XY；未启用或对应复选框未勾选时返回空数组。
+ * 托盘底面磁铁孔 XY。
+ * 孔位与孔数**只**由 `footprint`（托盘真实外轮廓）决定，不再读取 mapCrop。
  *
- * - 圆形：沿圆周均匀分布，`circleCount` 默认 3（2～12）
+ * - 圆形：沿外圆周均匀分布，`circleCount` 默认 3（2～12）
  * - 矩形：四角各一（4 孔）
- * - 正多边形：孔数 = 边数，孔位沿各顶点方向内缩
- *
- * 传入 `options.footprintShape` / `polygonVertexCount` 时与托盘外轮廓严格对齐。
+ * - 正多边形：外轮廓每个顶点各 1 孔（六边形 = 6 孔）
  */
-export function computeMagnetHoleLayout(
+export function computeTrayBottomMagnetHoles(
   config: AppConfig,
-  options?: MagnetLayoutOptions,
-): MagnetHoleLayout {
-  const { magnet } = config.assembly;
-  if (!magnet.enabled) {
-    return { snapFit: [], fridge: [] };
+  footprint: TrayFootprint,
+): MagnetHole2D[] {
+  if (!config.assembly.magnet.enabled) {
+    return [];
   }
 
-  const { mapCrop } = config;
-  const shape = resolveLayoutShape(mapCrop, options);
-  const polygonSides = resolveLayoutPolygonSides(mapCrop, options);
-  const foot = physicalFootprintMm(mapCrop);
-  const terrainR = foot.radiusMm ?? foot.widthMm / 2;
-  const terrainHw = foot.widthMm / 2;
-  const terrainHh = foot.heightMm / 2;
-  const circleCount = resolveCircleMagnetCount(magnet);
-
-  const snapFit = magnet.snapFitHole
-    ? snapFitHoles(
-        shape,
-        terrainR,
-        terrainHw,
-        terrainHh,
-        polygonSides,
-        circleCount,
-      )
-    : [];
-
-  let fridge: MagnetHole2D[] = [];
-  if (magnet.fridgeMagnetHole) {
-    const { tray, assembly } = config;
-    const tol = assembly.trayToleranceMm;
-    const rim = tray.rimWidthMm;
-    const outerR = terrainR + tol + rim;
-    const outerHw = terrainHw + tol + rim;
-    const outerHh = terrainHh + tol + rim;
-    fridge = fridgeHoles(
-      shape,
-      outerR,
-      outerHw,
-      outerHh,
-      polygonSides,
-      circleCount,
-    );
+  let holes: MagnetHole2D[] = [];
+  switch (footprint.shape) {
+    case "circle": {
+      const count = resolveCircleMagnetCount(config.assembly.magnet);
+      const radius = footprint.outerRadius ?? meanRadius(footprint.outer);
+      holes = layoutOnCircle(
+        count,
+        radius,
+        BOTTOM_INSET.circle,
+        TOP_VERTEX_PHASE + Math.PI / count,
+      );
+      break;
+    }
+    case "rectangle":
+      holes = layoutOnRectangle(
+        footprint.outerHw ?? 0,
+        footprint.outerHh ?? 0,
+        BOTTOM_INSET.rectangle,
+      );
+      break;
+    case "polygon":
+      if (footprint.outer.length < 3) {
+        holes = [];
+      } else {
+        holes = layoutOnOuterVerts(footprint.outer, BOTTOM_INSET.polygon);
+      }
+      break;
+    default:
+      holes = [];
   }
 
-  return { snapFit, fridge };
+  return holes;
+}
+
+/** UI 提示用：未启用磁铁时返回 0 */
+export function trayMagnetHoleCount(
+  config: AppConfig,
+  footprint: TrayFootprint,
+): number {
+  return computeTrayBottomMagnetHoles(config, footprint).length;
 }

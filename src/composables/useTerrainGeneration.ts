@@ -101,8 +101,6 @@ export function useTerrainGeneration(
       config.value.assembly.magnet.diameterMm,
       config.value.assembly.magnet.thicknessMm,
       config.value.assembly.magnet.circleCount,
-      config.value.assembly.magnet.snapFitHole,
-      config.value.assembly.magnet.fridgeMagnetHole,
       viewport.value.w,
       viewport.value.h,
     ],

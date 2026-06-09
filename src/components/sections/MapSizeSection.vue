@@ -109,5 +109,11 @@ const isPolygon = computed(() => config.value.mapCrop.shape === "polygon");
 .row {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
+}
+
+.row > * {
+  flex: 1;
+  min-width: 120px;
 }
 </style>

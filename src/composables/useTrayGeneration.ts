@@ -4,6 +4,9 @@ import { useConfigStore } from "@/stores/config";
 import { useUiStore } from "@/stores/ui";
 import { ipcGenerateTray, formatIpcError } from "@/ipc/client";
 import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
+import { logMagnetDebug } from "@shared/utils/magnet-debug-log";
+import { computeTrayFootprint } from "@shared/utils/tray-footprint";
 import type { TrayMeshPayload } from "@shared/types/tray";
 
 const DEBOUNCE_MS = 400;
@@ -42,8 +45,22 @@ export function useTrayGeneration() {
     error.value = null;
 
     try {
+      const snapshot = configStore.toSnapshot();
+      const footprint = computeTrayFootprint(snapshot);
+      const holes = computeTrayBottomMagnetHoles(snapshot, footprint);
+      logMagnetDebug({
+        phase: "renderer-tray-ipc",
+        mapCropShape: snapshot.mapCrop.shape,
+        polygonSides: snapshot.mapCrop.polygonSides,
+        footprintShape: footprint.shape,
+        outerVertCount: footprint.outer.length,
+        magnetEnabled: snapshot.assembly.magnet.enabled,
+        circleCount: snapshot.assembly.magnet.circleCount,
+        holeCount: holes.length,
+      });
+
       const res = await ipcGenerateTray({
-        config: configStore.toSnapshot(),
+        config: snapshot,
       });
       if (id !== requestId) return;
       mesh.value = res.mesh;
@@ -82,8 +99,6 @@ export function useTrayGeneration() {
       config.value.assembly.magnet.diameterMm,
       config.value.assembly.magnet.thicknessMm,
       config.value.assembly.magnet.circleCount,
-      config.value.assembly.magnet.fridgeMagnetHole,
-      config.value.assembly.magnet.snapFitHole,
       config.value.mapCrop.shape,
       config.value.mapCrop.polygonSides,
       borderTextEnabled.value,

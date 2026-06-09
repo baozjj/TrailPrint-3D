@@ -8,6 +8,9 @@ import { formatIpcError, ipcGenerateExport, ipcOnExportProgress, ipcRevealExport
 import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import { physicalFootprintMm } from '@shared/utils/crop-region'
 import { ensureMapZoomFitsTrail } from '@shared/utils/trail-fit'
+import { computeTrayBottomMagnetHoles } from '@shared/utils/magnet-hole-layout'
+import { logMagnetDebug } from '@shared/utils/magnet-debug-log'
+import { computeTrayFootprint } from '@shared/utils/tray-footprint'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
@@ -88,6 +91,22 @@ async function handleGenerate(): Promise<void> {
     configStore.config.mapCrop.mapCenterLon = exportConfig.mapCrop.mapCenterLon
     configStore.config.mapCrop.mapZoom = exportConfig.mapCrop.mapZoom
   }
+
+  const exportFootprint = computeTrayFootprint(exportConfig)
+  const exportHoles = computeTrayBottomMagnetHoles(exportConfig, exportFootprint)
+  logMagnetDebug({
+    phase: 'renderer-export',
+    mapCropShape: exportConfig.mapCrop.shape,
+    polygonSides: exportConfig.mapCrop.polygonSides,
+    footprintShape: exportFootprint.shape,
+    outerVertCount: exportFootprint.outer.length,
+    magnetEnabled: exportConfig.assembly.magnet.enabled,
+    circleCount: exportConfig.assembly.magnet.circleCount,
+    holeCount: exportHoles.length,
+    holes: exportHoles,
+    note: '渲染进程导出前快照；请与终端主进程 TrailPrint:Magnet 日志对照',
+  })
+
   try {
     const res = await ipcGenerateExport({
       config: exportConfig,
