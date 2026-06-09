@@ -401,9 +401,6 @@ watch(
   ],
   () => {
     updateMaskLayout();
-    if (config.value.gpx.imported && config.value.gpx.bounds) {
-      scheduleFitTrackInView();
-    }
   },
 );
 
