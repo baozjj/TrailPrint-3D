@@ -49,7 +49,7 @@ Please build a layout with two main areas:
 **2. 地形塑造 (Section 2)**
 
 - 模型基础厚度: Numerical input with "mm".
-- Z轴高程夸张: A sleek slider from 1.0x to 5.0x.
+- 地形起伏: A sleek slider from 1.0x to 5.0x.
 - 地形平滑度: Segmented Control [原始 | 轻度 | 中度 | 高度].
 
 **3. 轨迹设置 (Section 3)**

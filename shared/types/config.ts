@@ -173,9 +173,9 @@ export function createDefaultConfig(): AppConfig {
       heightAboveMainMm: 0.12,
     },
     tray: {
-      totalThicknessMm: 8,
-      recessDepthMm: 5,
-      rimWidthMm: 6,
+      totalThicknessMm: 5,
+      recessDepthMm: 2,
+      rimWidthMm: 8,
     },
     assembly: {
       trailToleranceMm: 0.15,

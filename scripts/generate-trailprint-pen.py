@@ -394,7 +394,7 @@ def build_document() -> dict:
         "2. 地形塑造",
         [
             input_field("模型基础厚度", "3.0"),
-            slider_row("Z轴高程夸张", "2.5x"),
+            slider_row("地形起伏", "2.5x"),
             {
                 "type": "frame",
                 "id": nid(),
@@ -430,7 +430,7 @@ def build_document() -> dict:
     sec4 = accordion_section(
         "4. 托盘底座",
         [
-            input_field("总厚度", "4.0"),
+            input_field("总厚度", "5.0"),
             input_field("下陷深度", "2.0"),
             input_field("边框宽度", "8.0"),
         ],
