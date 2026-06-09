@@ -9,7 +9,8 @@ export interface CylinderCut {
   zTop: number;
 }
 
-const WALL_SEGMENTS = 24;
+export const CYLINDER_WALL_SEGMENTS = 24;
+const WALL_SEGMENTS = CYLINDER_WALL_SEGMENTS;
 const EPS = 1e-5;
 
 function vertexAt(

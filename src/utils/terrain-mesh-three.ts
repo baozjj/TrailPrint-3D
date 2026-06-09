@@ -90,7 +90,12 @@ function applyTerrainUvs(
 
 export function payloadToBufferGeometry(
   payload: TerrainMeshPayload,
-  options?: { terrain?: boolean; crop?: TerrainCropRegion },
+  options?: {
+    terrain?: boolean;
+    crop?: TerrainCropRegion;
+    /** 托盘等硬边 CAD 网格：不合并顶点，避免底面法线被拉歪产生杂色高光 */
+    hardEdges?: boolean;
+  },
 ): THREE.BufferGeometry {
   const geometry = new THREE.BufferGeometry();
   const pos = new Float32Array(payload.positions);
@@ -123,7 +128,7 @@ export function payloadToBufferGeometry(
   }
 
   let result = geometry;
-  if (options?.crop?.shape !== "polygon") {
+  if (!options?.hardEdges && options?.crop?.shape !== "polygon") {
     const mergeTol = options?.crop?.shape === "circle" ? 0.001 : 0.02;
     result = mergeVertices(geometry, mergeTol);
     geometry.dispose();

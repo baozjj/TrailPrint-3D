@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { TerrainGenerateResponse } from "@shared/types/terrain";
 import { buildHeightfieldTerrainMesh } from "@shared/utils/heightfield-mesh";
+import { computeTerrainAssemblyOffsetZMm } from "@shared/utils/assembly-layout";
 import {
   buildTerrainGeometryFromPreview,
   buildTrailTubeGeometry,
@@ -13,6 +14,7 @@ import {
 } from "@/utils/terrain-mesh-three";
 import { fetchSatelliteTextureForCrop } from "@/utils/satellite-imagery";
 import { useConfigStore } from "@/stores/config";
+import type { TrayMeshPayload } from "@shared/types/tray";
 import {
   terrainMeshQualitySpec,
   trailPreviewTubeSegments,
@@ -24,6 +26,7 @@ const { config } = storeToRefs(configStore);
 
 const props = defineProps<{
   result: TerrainGenerateResponse | null;
+  trayMesh?: TrayMeshPayload | null;
   generating?: boolean;
   error?: string | null;
   overlayLoading?: boolean;
@@ -37,9 +40,11 @@ let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
 let camera: THREE.PerspectiveCamera | null = null;
 let controls: OrbitControls | null = null;
+let trayRoot: THREE.Group | null = null;
 let terrainRoot: THREE.Group | null = null;
 let overlayRoot: THREE.Group | null = null;
 let terrainMaterial: THREE.MeshStandardMaterial | null = null;
+let trayMaterial: THREE.MeshLambertMaterial | null = null;
 let satelliteTexture: THREE.CanvasTexture | null = null;
 let animationId = 0;
 let resizeObserver: ResizeObserver | null = null;
@@ -80,15 +85,32 @@ function ensureTerrainMaterial(): THREE.MeshStandardMaterial {
   return terrainMaterial;
 }
 
+function ensureTrayMaterial(): THREE.MeshLambertMaterial {
+  if (!trayMaterial) {
+    // 预览需 360° 环视：双面 + 哑光 Lambert，避免底面被 FrontSide 剔除
+    trayMaterial = new THREE.MeshLambertMaterial({
+      color: 0x5c6670,
+      flatShading: true,
+      side: THREE.DoubleSide,
+    });
+  }
+  return trayMaterial;
+}
+
 async function rebuildScene(): Promise<void> {
-  if (!terrainRoot || !overlayRoot || !camera || !controls) return;
+  if (!trayRoot || !terrainRoot || !overlayRoot || !camera || !controls) return;
 
   const token = ++rebuildToken;
 
+  disposeMeshGeometries(trayRoot);
   disposeMeshGeometries(terrainRoot);
   disposeMeshGeometries(overlayRoot);
+  trayRoot.clear();
   terrainRoot.clear();
   overlayRoot.clear();
+  trayRoot.position.z = 0;
+  terrainRoot.position.z = 0;
+  overlayRoot.position.z = 0;
   statusHint.value = null;
   disposeSatelliteTexture();
 
@@ -161,6 +183,19 @@ async function rebuildScene(): Promise<void> {
 
   if (token !== rebuildToken) return;
 
+  const assemblyOffsetZ = computeTerrainAssemblyOffsetZMm(config.value);
+  terrainRoot.position.z = assemblyOffsetZ;
+  overlayRoot.position.z = assemblyOffsetZ;
+
+  const tray = props.trayMesh;
+  if (tray?.positions?.length && tray.indices?.length) {
+    const trayGeo = payloadToBufferGeometry(tray, { hardEdges: true });
+    const trayObj = new THREE.Mesh(trayGeo, ensureTrayMaterial());
+    trayObj.frustumCulled = false;
+    trayObj.renderOrder = -1;
+    trayRoot.add(trayObj);
+  }
+
   const polyline = r.trailPolylineMm ?? [];
   const trailWidth = r.trailDisplayWidthMm ?? 4;
 
@@ -198,7 +233,9 @@ async function rebuildScene(): Promise<void> {
     statusHint.value = "轨迹折线为空，请检查 GPX 是否在白框内";
   }
 
-  fitCameraToTerrain(camera, controls, terrainMesh, overlayRoot);
+  const fitTargets: THREE.Object3D[] = [terrainMesh, overlayRoot];
+  if (trayRoot.children.length > 0) fitTargets.unshift(trayRoot);
+  fitCameraToTerrain(camera, controls, ...fitTargets);
 }
 
 function resize(): void {
@@ -234,8 +271,10 @@ function initThree(container: HTMLDivElement): void {
   renderer.toneMappingExposure = 1.05;
   container.appendChild(renderer.domElement);
 
+  trayRoot = new THREE.Group();
   terrainRoot = new THREE.Group();
   overlayRoot = new THREE.Group();
+  scene.add(trayRoot);
   scene.add(terrainRoot);
   scene.add(overlayRoot);
 
@@ -246,14 +285,18 @@ function initThree(container: HTMLDivElement): void {
   const fill = new THREE.DirectionalLight(0xfff4e6, 0.28);
   fill.position.set(-60, -40, 80);
   scene.add(fill);
+  const under = new THREE.DirectionalLight(0xd8e4ec, 0.45);
+  under.position.set(30, -50, -160);
+  scene.add(under);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.07;
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.28;
-  controls.minPolarAngle = 0.2;
-  controls.maxPolarAngle = Math.PI / 2 - 0.1;
+  // 全角度环绕：允许从顶/底/侧面任意方向观察，不留死角
+  controls.minPolarAngle = 0;
+  controls.maxPolarAngle = Math.PI;
 
   resize();
   void rebuildScene();
@@ -271,6 +314,10 @@ function disposeThree(): void {
   resizeObserver = null;
   controls?.dispose();
   controls = null;
+  if (trayRoot) {
+    disposeMeshGeometries(trayRoot);
+    trayRoot.clear();
+  }
   if (terrainRoot) {
     disposeMeshGeometries(terrainRoot);
     terrainRoot.clear();
@@ -279,11 +326,14 @@ function disposeThree(): void {
     disposeMeshGeometries(overlayRoot);
     overlayRoot.clear();
   }
+  trayRoot = null;
   terrainRoot = null;
   overlayRoot = null;
   disposeSatelliteTexture();
   terrainMaterial?.dispose();
   terrainMaterial = null;
+  trayMaterial?.dispose();
+  trayMaterial = null;
   trailMaterial.dispose();
   renderer?.dispose();
   renderer?.domElement.remove();
@@ -294,6 +344,19 @@ function disposeThree(): void {
 
 watch(
   () => props.result,
+  () => {
+    void rebuildScene();
+  },
+  { deep: true },
+);
+
+watch(
+  () => [
+    props.trayMesh,
+    config.value.tray.totalThicknessMm,
+    config.value.tray.recessDepthMm,
+    config.value.terrain.baseSolidThicknessMm,
+  ],
   () => {
     void rebuildScene();
   },
@@ -347,7 +410,7 @@ defineExpose({ imageryLoading });
       class="terrain-preview__badge terrain-preview__badge--dim"
     >
       {{ demLabel }}
-      <span> · 红=轨迹 · 拖动旋转</span>
+      <span> · 含托盘底座 · 红=轨迹 · 拖动旋转</span>
     </div>
   </div>
 </template>

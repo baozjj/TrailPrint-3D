@@ -18,6 +18,17 @@ function insideHalfPlane(
   return cross2(b.x - a.x, b.y - a.y, p.x - a.x, p.y - a.y) >= -1e-9;
 }
 
+/** 凸多边形（CCW）内含判定 */
+export function pointInConvexPolygon(p: Vec2, poly: Vec2[]): boolean {
+  if (poly.length < 3) return false;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    if (!insideHalfPlane(p, a, b)) return false;
+  }
+  return true;
+}
+
 function intersectSegments(
   p: Vec2,
   q: Vec2,

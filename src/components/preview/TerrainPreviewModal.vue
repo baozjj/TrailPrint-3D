@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref, watch } from "vue";
 import TerrainMeshPreview from "@/components/preview/TerrainMeshPreview.vue";
 import type { TerrainGenerateResponse } from "@shared/types/terrain";
+import type { TrayMeshPayload } from "@shared/types/tray";
 
 const open = defineModel<boolean>({ required: true });
 const viewport = defineModel<{ w: number; h: number }>("viewport", {
@@ -10,6 +11,7 @@ const viewport = defineModel<{ w: number; h: number }>("viewport", {
 
 defineProps<{
   result: TerrainGenerateResponse | null;
+  trayMesh: TrayMeshPayload | null;
   generating: boolean;
   error: string | null;
 }>();
@@ -108,6 +110,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               class="terrain-modal__preview"
               :class="{ 'terrain-modal__preview--dim': generating }"
               :result="result"
+              :tray-mesh="trayMesh"
               :generating="generating"
               :error="error"
               overlay-loading

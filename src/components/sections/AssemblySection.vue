@@ -67,7 +67,9 @@ const showCircleMagnetCount = computed(
     </div>
 
     <template v-if="config.assembly.magnet.enabled">
-      <p class="hint">开启后在托盘底面生成磁铁孔，用于嵌入磁铁。</p>
+      <p class="hint">
+        开启后在托盘底面生成正六边形磁铁孔（内切圆直径与磁铁直径一致），圆磁铁易放入，六角空隙便于取出。
+      </p>
       <div class="row">
         <NumberField
           v-model="config.assembly.magnet.diameterMm"
@@ -89,7 +91,7 @@ const showCircleMagnetCount = computed(
       <NumberField
         v-if="showCircleMagnetCount"
         v-model="config.assembly.magnet.circleCount"
-        label="圆形孔数"
+        label="磁铁孔数"
         :min="2"
         :max="12"
         :step="1"

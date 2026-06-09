@@ -1,9 +1,14 @@
 import type { TerrainMeshPayload } from "@shared/types/terrain";
+import {
+  magnetHexagonVertsMm,
+  magnetHoleInteriorSample,
+} from "../../../shared/utils/magnet-hole-geometry";
 import type { Vec2 } from "@shared/utils/tray-footprint";
 
-const BOTTOM_EDGE_STEPS = 12;
 const HOLE_WALL_SEGMENTS = 24;
-const HOLE_PLATE_MARGIN_MM = 0.25;
+const BOTTOM_PLATE_CELL_MIN_MM = 1.2;
+const BOTTOM_PLATE_CELL_MAX_MM = 2.8;
+const BOTTOM_GRID_SUBDIVIDE_MAX = 4;
 
 function pushVertex(
   positions: number[],
@@ -16,84 +21,37 @@ function pushVertex(
   return idx;
 }
 
-function lerp2(a: Vec2, b: Vec2, t: number): Vec2 {
-  return {
-    x: a.x + (b.x - a.x) * t,
-    y: a.y + (b.y - a.y) * t,
-  };
-}
-
-function polygonCentroid(outer: Vec2[]): Vec2 {
-  let cx = 0;
-  let cy = 0;
-  for (const v of outer) {
-    cx += v.x;
-    cy += v.y;
+function pointInConvexPolygon(p: Vec2, poly: Vec2[]): boolean {
+  if (poly.length < 3) return false;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i]!;
+    const b = poly[(i + 1) % poly.length]!;
+    const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+    if (cross < -1e-9) return false;
   }
-  const n = outer.length || 1;
-  return { x: cx / n, y: cy / n };
+  return true;
 }
 
-function edgeInwardNormal(va: Vec2, vb: Vec2, centroid: Vec2): Vec2 {
-  const dx = vb.x - va.x;
-  const dy = vb.y - va.y;
-  const len = Math.hypot(dx, dy);
-  if (len < 1e-9) return { x: 0, y: 0 };
-  let nx = -dy / len;
-  let ny = dx / len;
-  const mid = { x: (va.x + vb.x) * 0.5, y: (va.y + vb.y) * 0.5 };
-  const toCenter = { x: centroid.x - mid.x, y: centroid.y - mid.y };
-  if (nx * toCenter.x + ny * toCenter.y < 0) {
-    nx = -nx;
-    ny = -ny;
-  }
-  return { x: nx, y: ny };
-}
-
-function insideAnyHole(
+function insideHoleOpening(
   x: number,
   y: number,
   holes: ReadonlyArray<{ x: number; y: number }>,
   radius: number,
 ): boolean {
-  const limit = radius + HOLE_PLATE_MARGIN_MM;
-  const limitSq = limit * limit;
+  const limitSq = radius * radius;
   for (const h of holes) {
     const dx = x - h.x;
     const dy = y - h.y;
-    if (dx * dx + dy * dy <= limitSq) return true;
+    if (dx * dx + dy * dy < limitSq) return true;
   }
   return false;
 }
 
-/** 沿边内法线向内推进，停在磁铁孔保护区外沿 */
-function inwardPointStopAtHoles(
-  ex: number,
-  ey: number,
-  nx: number,
-  ny: number,
-  maxDist: number,
-  holes: ReadonlyArray<{ x: number; y: number }>,
-  holeRadius: number,
-): { x: number; y: number } | null {
-  if (insideAnyHole(ex, ey, holes, holeRadius)) return null;
-
-  let tLo = 0;
-  let tHi = maxDist;
-  for (let i = 0; i < 28; i++) {
-    const mid = (tLo + tHi) * 0.5;
-    const px = ex + nx * mid;
-    const py = ey + ny * mid;
-    if (insideAnyHole(px, py, holes, holeRadius)) {
-      tHi = mid;
-    } else {
-      tLo = mid;
-    }
-  }
-
-  const t = tLo * 0.998;
-  if (t < 0.15) return null;
-  return { x: ex + nx * t, y: ey + ny * t };
+function bottomPlateCellSize(holeRadius: number): number {
+  return Math.max(
+    BOTTOM_PLATE_CELL_MIN_MM,
+    Math.min(BOTTOM_PLATE_CELL_MAX_MM, holeRadius * 0.42),
+  );
 }
 
 function pointInTri2D(
@@ -154,8 +112,10 @@ function pushBottomTriangle(
   indices.push(i0, i1, i2);
 }
 
-/** 外边缘条带底面（法线朝下），孔区留空 */
-function buildBottomPlateStrips(
+/**
+ * 铺满托盘底面（外轮廓内自适应网格），仅在磁铁孔圆域留空。
+ */
+function buildBottomPlateGrid(
   outer: Vec2[],
   z: number,
   holes: ReadonlyArray<{ x: number; y: number }>,
@@ -163,50 +123,72 @@ function buildBottomPlateStrips(
   positions: number[],
   indices: number[],
 ): void {
-  const centroid = polygonCentroid(outer);
-  let maxRadius = 0;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
   for (const v of outer) {
-    maxRadius = Math.max(maxRadius, Math.hypot(v.x, v.y));
+    minX = Math.min(minX, v.x);
+    maxX = Math.max(maxX, v.x);
+    minY = Math.min(minY, v.y);
+    maxY = Math.max(maxY, v.y);
   }
-  const maxInward = maxRadius * 1.05;
+  const cell = bottomPlateCellSize(holeRadius);
+  const minCell = cell * 0.45;
 
-  for (let i = 0; i < outer.length; i++) {
-    const va = outer[i]!;
-    const vb = outer[(i + 1) % outer.length]!;
-    const inward = edgeInwardNormal(va, vb, centroid);
-    if (Math.hypot(inward.x, inward.y) < 1e-9) continue;
+  function emitQuad(x0: number, y0: number, x1: number, y1: number): void {
+    const i00 = pushVertex(positions, x0, y0, z);
+    const i10 = pushVertex(positions, x1, y0, z);
+    const i11 = pushVertex(positions, x1, y1, z);
+    const i01 = pushVertex(positions, x0, y1, z);
+    // 法线朝下（-Z）
+    pushBottomTriangle(positions, indices, i00, i10, i11, holes, holeRadius);
+    pushBottomTriangle(positions, indices, i00, i11, i01, holes, holeRadius);
+  }
 
-    for (let s = 0; s < BOTTOM_EDGE_STEPS; s++) {
-      const ta = s / BOTTOM_EDGE_STEPS;
-      const tb = (s + 1) / BOTTOM_EDGE_STEPS;
-      const ea = lerp2(va, vb, ta);
-      const eb = lerp2(va, vb, tb);
-      const ia = inwardPointStopAtHoles(
-        ea.x,
-        ea.y,
-        inward.x,
-        inward.y,
-        maxInward,
-        holes,
-        holeRadius,
-      );
-      const ib = inwardPointStopAtHoles(
-        eb.x,
-        eb.y,
-        inward.x,
-        inward.y,
-        maxInward,
-        holes,
-        holeRadius,
-      );
-      if (!ia || !ib) continue;
+  function fillRect(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    depth: number,
+  ): void {
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    if (!pointInConvexPolygon({ x: cx, y: cy }, outer)) return;
+    if (insideHoleOpening(cx, cy, holes, holeRadius)) return;
+    if (x1 - x0 < minCell || y1 - y0 < minCell) return;
 
-      const iEa = pushVertex(positions, ea.x, ea.y, z);
-      const iEb = pushVertex(positions, eb.x, eb.y, z);
-      const iIa = pushVertex(positions, ia.x, ia.y, z);
-      const iIb = pushVertex(positions, ib.x, ib.y, z);
-      pushBottomTriangle(positions, indices, iEa, iIb, iEb, holes, holeRadius);
-      pushBottomTriangle(positions, indices, iEa, iIa, iIb, holes, holeRadius);
+    const corners: Vec2[] = [
+      { x: x0, y: y0 },
+      { x: x1, y: y0 },
+      { x: x1, y: y1 },
+      { x: x0, y: y1 },
+    ];
+    const allInside = corners.every(
+      (c) =>
+        pointInConvexPolygon(c, outer) &&
+        !insideHoleOpening(c.x, c.y, holes, holeRadius),
+    );
+    if (allInside) {
+      emitQuad(x0, y0, x1, y1);
+      return;
+    }
+    if (depth >= BOTTOM_GRID_SUBDIVIDE_MAX) return;
+
+    const mx = (x0 + x1) / 2;
+    const my = (y0 + y1) / 2;
+    fillRect(x0, y0, mx, my, depth + 1);
+    fillRect(mx, y0, x1, my, depth + 1);
+    fillRect(mx, my, x1, y1, depth + 1);
+    fillRect(x0, my, mx, y1, depth + 1);
+  }
+
+  for (let y = minY; y < maxY - 1e-6; y += cell) {
+    const y1 = Math.min(y + cell, maxY);
+    for (let x = minX; x < maxX - 1e-6; x += cell) {
+      const x1 = Math.min(x + cell, maxX);
+      fillRect(x, y, x1, y1, 0);
     }
   }
 }
@@ -271,6 +253,32 @@ function stripBottomCapTriangles(mesh: TerrainMeshPayload): number[] {
   return kept;
 }
 
+/** 底面某点是否被底板三角面覆盖（用于诊断镂空） */
+export function bottomPlateCoversPoint(
+  mesh: TerrainMeshPayload,
+  px: number,
+  py: number,
+): boolean {
+  const pos = mesh.positions;
+  for (let t = 0; t < mesh.indices.length; t += 3) {
+    const i0 = mesh.indices[t]!;
+    const i1 = mesh.indices[t + 1]!;
+    const i2 = mesh.indices[t + 2]!;
+    const z0 = pos[i0 * 3 + 2]!;
+    const z1 = pos[i1 * 3 + 2]!;
+    const z2 = pos[i2 * 3 + 2]!;
+    if (
+      Math.abs(z0 - mesh.bottomZ) > 1e-3 ||
+      Math.abs(z1 - mesh.bottomZ) > 1e-3 ||
+      Math.abs(z2 - mesh.bottomZ) > 1e-3
+    ) {
+      continue;
+    }
+    if (pointInTri2D(px, py, i0, i1, i2, pos)) return true;
+  }
+  return false;
+}
+
 /** 底面 z=0 上是否存在覆盖孔口的三角面（应接近 0） */
 export function countBottomPlateOverHole(
   mesh: TerrainMeshPayload,
@@ -280,31 +288,27 @@ export function countBottomPlateOverHole(
   let covered = 0;
   const pos = mesh.positions;
   for (const h of holes) {
-    const testR = holeRadius * 0.55;
-    const samples = 8;
+    const sample = magnetHoleInteriorSample(h.x, h.y, holeRadius);
+    const px = sample.x;
+    const py = sample.y;
     let hits = 0;
-    for (let k = 0; k < samples; k++) {
-      const a = (k / samples) * Math.PI * 2;
-      const px = h.x + testR * Math.cos(a);
-      const py = h.y + testR * Math.sin(a);
-      for (let t = 0; t < mesh.indices.length; t += 3) {
-        const i0 = mesh.indices[t]!;
-        const i1 = mesh.indices[t + 1]!;
-        const i2 = mesh.indices[t + 2]!;
-        const z0 = pos[i0 * 3 + 2]!;
-        const z1 = pos[i1 * 3 + 2]!;
-        const z2 = pos[i2 * 3 + 2]!;
-        if (
-          Math.abs(z0 - mesh.bottomZ) > 1e-3 ||
-          Math.abs(z1 - mesh.bottomZ) > 1e-3 ||
-          Math.abs(z2 - mesh.bottomZ) > 1e-3
-        ) {
-          continue;
-        }
-        if (pointInTri2D(px, py, i0, i1, i2, pos)) {
-          hits++;
-          break;
-        }
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const i0 = mesh.indices[t]!;
+      const i1 = mesh.indices[t + 1]!;
+      const i2 = mesh.indices[t + 2]!;
+      const z0 = pos[i0 * 3 + 2]!;
+      const z1 = pos[i1 * 3 + 2]!;
+      const z2 = pos[i2 * 3 + 2]!;
+      if (
+        Math.abs(z0 - mesh.bottomZ) > 1e-3 ||
+        Math.abs(z1 - mesh.bottomZ) > 1e-3 ||
+        Math.abs(z2 - mesh.bottomZ) > 1e-3
+      ) {
+        continue;
+      }
+      if (pointInTri2D(px, py, i0, i1, i2, pos)) {
+        hits++;
+        break;
       }
     }
     if (hits > 0) covered++;
@@ -325,7 +329,7 @@ export function applyTrayMagnetPockets(
   const positions = [...mesh.positions];
   const indices = stripBottomCapTriangles(mesh);
 
-  buildBottomPlateStrips(
+  buildBottomPlateGrid(
     outer,
     mesh.bottomZ,
     holes,
@@ -361,16 +365,21 @@ export function countBottomHoleOpenings(
 ): number {
   let count = 0;
   for (const h of holes) {
-    let ringVerts = 0;
-    for (let i = 0; i < mesh.positions.length; i += 3) {
-      const x = mesh.positions[i]!;
-      const y = mesh.positions[i + 1]!;
-      const z = mesh.positions[i + 2]!;
-      if (Math.abs(z - mesh.bottomZ) > 1e-3) continue;
-      const dist = Math.hypot(x - h.x, y - h.y);
-      if (Math.abs(dist - holeRadius) < 0.35) ringVerts++;
+    const corners = magnetHexagonVertsMm(h.x, h.y, holeRadius);
+    let matched = 0;
+    for (const c of corners) {
+      for (let i = 0; i < mesh.positions.length; i += 3) {
+        const x = mesh.positions[i]!;
+        const y = mesh.positions[i + 1]!;
+        const z = mesh.positions[i + 2]!;
+        if (Math.abs(z - mesh.bottomZ) > 1e-3) continue;
+        if (Math.hypot(x - c.x, y - c.y) < 0.45) {
+          matched++;
+          break;
+        }
+      }
     }
-    if (ringVerts >= HOLE_WALL_SEGMENTS / 2) count++;
+    if (matched >= 4) count++;
   }
   return count;
 }

@@ -5,6 +5,7 @@ import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
 import { useGpxImport } from "@/composables/useGpxImport";
 import { useTerrainGeneration } from "@/composables/useTerrainGeneration";
+import { useTrayGeneration } from "@/composables/useTrayGeneration";
 import MapLeafletView from "@/components/map/MapLeafletView.vue";
 import TerrainPreviewModal from "@/components/preview/TerrainPreviewModal.vue";
 
@@ -28,11 +29,13 @@ function syncViewportToStore(): void {
 const terrainGen = useTerrainGeneration(modalViewport, {
   enabled: terrainPreviewOpen,
 });
+const trayGen = useTrayGeneration();
 
 const { regenerate: regenerateTerrain } = terrainGen;
 const terrainResult = toRef(terrainGen, "lastResult");
 const terrainGenerating = toRef(terrainGen, "generating");
 const terrainError = toRef(terrainGen, "error");
+const trayMesh = toRef(trayGen, "mesh");
 
 let resizeObserver: ResizeObserver | null = null;
 
@@ -226,6 +229,7 @@ const canOpen3d = computed(() => config.value.gpx.imported);
       v-model="terrainPreviewOpen"
       v-model:viewport="modalViewport"
       :result="terrainResult"
+      :tray-mesh="trayMesh"
       :generating="terrainGenerating"
       :error="terrainError"
       @opened="onTerrainModalOpened"

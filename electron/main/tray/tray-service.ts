@@ -11,10 +11,9 @@ import {
 } from "@shared/utils/magnet-debug-log";
 import { IpcException } from "@shared/ipc/types";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
-import { buildTrayBaseMesh } from "./tray-base-mesh";
+import { buildTrayBaseMeshCsg } from "./tray-csg-mesh";
 import { buildBorderTextMeshes } from "./border-text-mesh";
 import { mergeMeshPayloads } from "./mesh-merge";
-import { applyTrayMagnetHoles } from "../assembly/apply-magnet-holes";
 
 export async function generateTrayBase(
   req: TrayGenerateRequest,
@@ -49,7 +48,21 @@ export async function generateTrayBase(
         : undefined,
   });
 
-  const base = buildTrayBaseMesh(footprint, config.tray);
+  const magnetHoles = config.assembly.magnet.enabled
+    ? computeTrayBottomMagnetHoles(config, footprint)
+    : [];
+
+  const base = buildTrayBaseMeshCsg(
+    footprint,
+    config.tray,
+    config.assembly.magnet.enabled
+      ? {
+          holes: magnetHoles,
+          radiusMm: Math.max(0.5, config.assembly.magnet.diameterMm / 2),
+          depthMm: Math.max(0.5, config.assembly.magnet.thicknessMm),
+        }
+      : undefined,
+  );
   const borderTextEnabled =
     config.mapCrop.shape !== "circle" &&
     config.tray.borderTextByEdge.some((e) => e.content.trim().length > 0);
@@ -62,10 +75,7 @@ export async function generateTrayBase(
     borderTextEnabled,
   );
 
-  let mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
-
   if (config.assembly.magnet.enabled) {
-    const holes = computeTrayBottomMagnetHoles(config, footprint);
     logMagnetDebug({
       phase: "tray-layout",
       mapCropShape: config.mapCrop.shape,
@@ -74,30 +84,33 @@ export async function generateTrayBase(
       outerVertCount: footprint.outer.length,
       magnetEnabled: true,
       circleCount: config.assembly.magnet.circleCount,
-      holeCount: holes.length,
-      holes,
+      holeCount: magnetHoles.length,
+      holes: magnetHoles,
     });
     logMagnetDebug({
       phase: "tray-validate",
       footprintShape: footprint.shape,
       outerVertCount: footprint.outer.length,
-      holeCount: holes.length,
+      holeCount: magnetHoles.length,
       note: magnetDebugSummary({
         phase: "tray-validate",
         footprintShape: footprint.shape,
         outerVertCount: footprint.outer.length,
-        holeCount: holes.length,
+        holeCount: magnetHoles.length,
       }),
     });
-    if (footprint.shape === "polygon" && holes.length !== footprint.outer.length) {
+    if (
+      footprint.shape === "polygon" &&
+      magnetHoles.length !== footprint.outer.length
+    ) {
       throw new IpcException(
         "MAGNET_LAYOUT",
-        `多边形托盘磁铁孔数量异常（期望 ${footprint.outer.length}，实际 ${holes.length}）`,
+        `多边形托盘磁铁孔数量异常（期望 ${footprint.outer.length}，实际 ${magnetHoles.length}）`,
       );
     }
   }
 
-  mesh = applyTrayMagnetHoles(mesh, config, footprint);
+  const mesh = textMesh ? mergeMeshPayloads([base, textMesh]) : base;
 
   return {
     mesh,

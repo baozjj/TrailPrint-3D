@@ -4,10 +4,14 @@ import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
 import { logMagnetDebug } from "@shared/utils/magnet-debug-log";
 import type { TrayFootprint } from "@shared/utils/tray-footprint";
 import {
-  applyTrayMagnetPockets,
+  applyCylinderCuts,
+  countMeshCutIntersections,
+  type CylinderCut,
+} from "./mesh-cylinder-cut";
+import {
   countBottomHoleOpenings,
   countBottomPlateOverHole,
-} from "./tray-magnet-pockets";
+} from "./tray-magnet-diagnostics";
 
 function magnetRadiusMm(config: AppConfig): number {
   return Math.max(0.5, config.assembly.magnet.diameterMm / 2);
@@ -17,7 +21,10 @@ function magnetDepthMm(config: AppConfig): number {
   return Math.max(0.5, config.assembly.magnet.thicknessMm);
 }
 
-/** 托盘底面磁铁孔（自底面 z=0 向上挖） */
+/**
+ * 托盘底面磁铁盲孔：在完整封闭托盘实体上做圆柱体布尔差集。
+ * 保留完整底板，挖除圆柱体后补内壁 + 孔顶面（孔底在 z=bottomZ 敞开，供嵌入磁铁）。
+ */
 export function applyTrayMagnetHoles(
   mesh: TerrainMeshPayload,
   config: AppConfig,
@@ -30,19 +37,22 @@ export function applyTrayMagnetHoles(
   const depth = magnetDepthMm(config);
   const triBefore = mesh.indices.length / 3;
 
-  const result = applyTrayMagnetPockets(
-    mesh,
-    footprint.outer,
-    holes,
+  const cuts: CylinderCut[] = holes.map((h) => ({
+    x: h.x,
+    y: h.y,
     radius,
-    depth,
-  );
+    zBottom: mesh.bottomZ,
+    zTop: mesh.bottomZ + depth,
+  }));
+
+  const removed = countMeshCutIntersections(mesh, cuts);
+  const result = applyCylinderCuts(mesh, cuts);
 
   const openings = countBottomHoleOpenings(result, holes, radius);
   const covered = countBottomPlateOverHole(result, holes, radius);
 
   logMagnetDebug({
-    phase: "apply-pockets",
+    phase: "apply-cylinder-cuts",
     mapCropShape: config.mapCrop.shape,
     footprintShape: footprint.shape,
     outerVertCount: footprint.outer.length,
@@ -51,7 +61,7 @@ export function applyTrayMagnetHoles(
     cutDepthMm: depth,
     triCountBefore: triBefore,
     triCountAfter: result.indices.length / 3,
-    note: `底面孔洞开口 ${openings}/${holes.length}，被底面遮挡 ${covered}/${holes.length}`,
+    note: `圆柱差集移除 ${removed} 三角；底面孔洞开口 ${openings}/${holes.length}，孔口被底板遮挡 ${covered}/${holes.length}`,
   });
 
   return result;
