@@ -25,7 +25,7 @@ const gpx = computed(() => config.value.gpx)
 
 <style scoped>
 .gpx-summary {
-  margin: 0 20px 8px;
+  margin: 8px 20px;
   padding: 10px 12px;
   background: var(--tp-bg-input);
   border-radius: var(--tp-radius-control);
@@ -33,7 +33,7 @@ const gpx = computed(() => config.value.gpx)
 }
 
 .gpx-summary--error {
-  margin: 0 20px 8px;
+  margin: 8px 20px;
   padding: 10px 12px;
   background: #fff0f0;
   border-radius: var(--tp-radius-control);
