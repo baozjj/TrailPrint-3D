@@ -16,7 +16,7 @@
 
 <!-- 截图：两步路中打开轨迹并导出 GPX -->
 
-![两步路导出 GPX（待补充）](docs/images/readme/00-gpx-export-2bulu.png)
+![两步路导出 GPX](docs/images/readme/00-gpx-export-2bulu.webp)
 
 ### 1. 导入轨迹
 
