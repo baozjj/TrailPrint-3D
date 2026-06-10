@@ -24,39 +24,45 @@
 
 <!-- 截图：上传 GPX 文件 -->
 
-![导入 GPX 轨迹（待补充）](docs/images/readme/01-import-gpx.png)
+![导入 GPX 轨迹](docs/images/readme/01-import-gpx.webp)
 
-### 2. 构图取景
+### 2. 构图取景与调整参数
 
-选择底座形状，在地图上拖动、缩放，使轨迹位于合适位置。
+选择底座形状，在地图上拖动、缩放轨迹位置；同时在侧栏设置山体高度、表面平滑、托盘底座，以及拼装公差与磁吸孔位等参数。
 
-<!-- 截图：地图取景与底座形状 -->
+<!-- 截图：地图取景 + 侧栏参数面板（一张图） -->
 
-![构图取景（待补充）](docs/images/readme/02-compose-framing.png)
+![构图取景与调整参数](docs/images/readme/02-compose-framing.webp)
 
-### 3. 调整参数
-
-设置山体高度、表面平滑与托盘底座等参数。
-
-<!-- 截图：地形与托盘参数面板 -->
-
-![调整参数（待补充）](docs/images/readme/03-adjust-params.png)
-
-### 4. 配置公差
-
-根据打印机精度，设定拼装公差与磁吸孔位。
-
-<!-- 截图：公差与磁铁孔位设置 -->
-
-![配置公差（待补充）](docs/images/readme/04-assembly-tolerance.png)
-
-### 5. 导出模型
+### 3. 导出模型
 
 确认预览无误后，生成并下载打包好的 3D 模型压缩包。
 
 <!-- 截图：导出与下载 -->
 
-![导出模型（待补充）](docs/images/readme/05-export-model.png)
+![导出模型](docs/images/readme/03-export-model.webp)
+
+### 4. 导入 Bambu Studio 并上色
+
+解压下载的压缩包，将 `Terrain_Main.stl`、`Trail_Line.stl`、`Tray_Base.stl` 三个文件拖入 [Bambu Studio](https://bambulab.com/zh/download/studio)，为山体、轨迹与底座分别指定耗材颜色，预览多色拼装效果后即可切片打印。
+
+<!-- 截图：Bambu Studio 中导入三个 STL -->
+
+![Bambu Studio 导入模型](docs/images/readme/04-bambu-studio-import.webp)
+
+<!-- 截图：Bambu Studio 中上色后的预览效果 -->
+
+![Bambu Studio 上色效果](docs/images/readme/05-bambu-studio-colored.webp)
+
+### 5. 打印成品
+
+切片发送打印后，将山体、轨迹与底座拼装完成，即可得到实体地形模型。
+
+<!-- 实拍：3D 打印成品效果 -->
+
+![3D 打印成品](docs/images/readme/06-printed-result.webp)
+
+![3D 打印成品](docs/images/readme/07-printed-result-2.webp)
 
 ---
 
