@@ -1,6 +1,7 @@
 import type { AppConfig } from "@shared/types";
 import type { TerrainMeshPayload } from "@shared/types/terrain";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
+import { magnetCutDimensionsMm } from "@shared/utils/magnet-hole-geometry";
 import { logMagnetDebug } from "@shared/utils/magnet-debug-log";
 import type { TrayFootprint } from "@shared/utils/tray-footprint";
 import {
@@ -12,14 +13,6 @@ import {
   countBottomHoleOpenings,
   countBottomPlateOverHole,
 } from "./tray-magnet-diagnostics";
-
-function magnetRadiusMm(config: AppConfig): number {
-  return Math.max(0.5, config.assembly.magnet.diameterMm / 2);
-}
-
-function magnetDepthMm(config: AppConfig): number {
-  return Math.max(0.5, config.assembly.magnet.thicknessMm);
-}
 
 /**
  * 托盘底面磁铁盲孔：在完整封闭托盘实体上做圆柱体布尔差集。
@@ -33,8 +26,9 @@ export function applyTrayMagnetHoles(
   const holes = computeTrayBottomMagnetHoles(config, footprint);
   if (!holes.length) return mesh;
 
-  const radius = magnetRadiusMm(config);
-  const depth = magnetDepthMm(config);
+  const { radiusMm: radius, depthMm: depth } = magnetCutDimensionsMm(
+    config.assembly.magnet,
+  );
   const triBefore = mesh.indices.length / 3;
 
   const cuts: CylinderCut[] = holes.map((h) => ({

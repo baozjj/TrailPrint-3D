@@ -10,6 +10,7 @@ import {
   magnetDebugSummary,
 } from "@shared/utils/magnet-debug-log";
 import { IpcException } from "@shared/ipc/types";
+import { magnetCutDimensionsMm } from "@shared/utils/magnet-hole-geometry";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
 import { buildTrayBaseMeshCsg } from "./tray-csg-mesh";
 
@@ -50,14 +51,18 @@ export async function generateTrayBase(
     ? computeTrayBottomMagnetHoles(config, footprint)
     : [];
 
+  const magnetCut = config.assembly.magnet.enabled
+    ? magnetCutDimensionsMm(config.assembly.magnet)
+    : null;
+
   const mesh = buildTrayBaseMeshCsg(
     footprint,
     config.tray,
-    config.assembly.magnet.enabled
+    magnetCut
       ? {
           holes: magnetHoles,
-          radiusMm: Math.max(0.5, config.assembly.magnet.diameterMm / 2),
-          depthMm: Math.max(0.5, config.assembly.magnet.thicknessMm),
+          radiusMm: magnetCut.radiusMm,
+          depthMm: magnetCut.depthMm,
         }
       : undefined,
   );

@@ -28,3 +28,4 @@ GPX 点 `(lat, lon)` 映射到与 `Terrain_Main` 相同的模型平面 (mm)：
 - `config.assembly.magnet.enabled === false` 时不生成任何孔
 - **拼接孔**（`snapFitHole`）：`computeMagnetHoleLayout` 在模型平面给出 4 个配对 XY；主模型自 `bottomZ` 向上、托盘凹槽底自 `floorZ` 向下各挖 `thicknessMm` 深
 - **冰箱贴孔**（`fridgeMagnetHole`）：托盘最底面 `z=0` 向上浅孔，孔心沿外轮廓内缩布置
+- 孔径/孔深公差：`magnet.toleranceMm` 仅扩大六边形孔内切圆直径（+2×）与孔深（+1×），便于嵌入

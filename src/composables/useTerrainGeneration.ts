@@ -100,6 +100,7 @@ export function useTerrainGeneration(
       config.value.assembly.magnet.enabled,
       config.value.assembly.magnet.diameterMm,
       config.value.assembly.magnet.thicknessMm,
+      config.value.assembly.magnet.toleranceMm,
       config.value.assembly.magnet.circleCount,
       viewport.value.w,
       viewport.value.h,

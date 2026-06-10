@@ -1,3 +1,5 @@
+import type { MagnetConfig } from "../types/config";
+
 /** 磁铁孔平面几何：内切圆容纳圆形磁铁的正六边形 */
 
 export interface Vec2 {
@@ -8,6 +10,30 @@ export interface Vec2 {
 const HEX_SIDES = 6;
 /** 首顶点在 +Y，上下为平边，便于打印与取放 */
 const TOP_VERTEX_PHASE = -Math.PI / 2;
+
+export interface MagnetCutDimensions {
+  /** 含公差的孔内切圆半径 (mm) */
+  radiusMm: number;
+  /** 含公差的孔深 (mm) */
+  depthMm: number;
+  /** 磁铁标称半径 (mm) */
+  nominalRadiusMm: number;
+  /** 磁铁标称厚度 (mm) */
+  nominalDepthMm: number;
+}
+
+/** STL/CSG 挖孔尺寸：公差仅扩大孔径与孔深，不改变孔位 */
+export function magnetCutDimensionsMm(magnet: MagnetConfig): MagnetCutDimensions {
+  const tol = Math.max(0, magnet.toleranceMm ?? 0);
+  const nominalRadiusMm = Math.max(0.5, magnet.diameterMm / 2);
+  const nominalDepthMm = Math.max(0.5, magnet.thicknessMm);
+  return {
+    nominalRadiusMm,
+    nominalDepthMm,
+    radiusMm: nominalRadiusMm + tol,
+    depthMm: nominalDepthMm + tol,
+  };
+}
 
 /**
  * 正六边形孔轮廓：内切圆半径 = magnetRadiusMm（= 磁铁半径）。

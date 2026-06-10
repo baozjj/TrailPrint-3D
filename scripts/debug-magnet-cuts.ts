@@ -2,6 +2,7 @@ import { createDefaultConfig } from "../shared/types/config";
 import { computeTrayFootprint } from "../shared/utils/tray-footprint";
 import { buildTrayBaseMeshCsg } from "../electron/main/tray/tray-csg-mesh";
 import { computeTrayBottomMagnetHoles } from "../shared/utils/magnet-hole-layout";
+import { magnetCutDimensionsMm } from "../shared/utils/magnet-hole-geometry";
 import {
   bottomPlateCoversPoint,
   countBottomHoleOpenings,
@@ -22,8 +23,9 @@ cfg.mapCrop.polygonSideLengthMm = 40;
 
 const footprint = computeTrayFootprint(cfg);
 const holes = computeTrayBottomMagnetHoles(cfg, footprint);
-const radius = cfg.assembly.magnet.diameterMm / 2;
-const depth = cfg.assembly.magnet.thicknessMm;
+const { radiusMm: radius, depthMm: depth } = magnetCutDimensionsMm(
+  cfg.assembly.magnet,
+);
 
 const mesh = buildTrayBaseMeshCsg(footprint, cfg.tray, {
   holes,

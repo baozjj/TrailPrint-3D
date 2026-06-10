@@ -44,9 +44,13 @@ function ensureTrailConfigDefaults(cfg: AppConfig): void {
 function ensureMagnetConfigDefaults(cfg: AppConfig): void {
   const magnet = cfg.assembly.magnet as AppConfig["assembly"]["magnet"] & {
     circleCount?: number;
+    toleranceMm?: number;
   };
   if (magnet.circleCount == null) {
     magnet.circleCount = 3;
+  }
+  if (magnet.toleranceMm == null) {
+    magnet.toleranceMm = 0.1;
   }
 }
 

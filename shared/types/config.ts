@@ -83,6 +83,8 @@ export interface MagnetConfig {
   enabled: boolean;
   diameterMm: number;
   thicknessMm: number;
+  /** 孔径/孔深装配公差 (mm)：孔内切圆直径 +2×、孔深 +1× */
+  toleranceMm: number;
   /** 圆形底座磁铁孔数量（仅 shape===circle 时生效，默认 3，范围 2～12） */
   circleCount: number;
 }
@@ -184,6 +186,7 @@ export function createDefaultConfig(): AppConfig {
         enabled: false,
         diameterMm: 6,
         thicknessMm: 2,
+        toleranceMm: 0.1,
         circleCount: 3,
       },
     },
