@@ -23,14 +23,14 @@ const apiKeyTooltip =
     aria-labelledby="opentopo-api-key-title"
   >
     <div class="api-key-card__head">
-      <span class="api-key-card__badge">使用前必读</span>
+      <span v-if="!apiKeyConfigured" class="api-key-card__badge">使用前必读</span>
       <div class="api-key-card__title-row">
         <h2 id="opentopo-api-key-title" class="api-key-card__title">
           OpenTopography API Key
         </h2>
         <InfoTooltip aria-label="API Key 说明" :content="apiKeyTooltip" />
       </div>
-      <p class="api-key-card__desc">
+      <p v-if="!apiKeyConfigured" class="api-key-card__desc">
         下载地形高程数据前，请先填写 API Key。仅保存在本机。
       </p>
     </div>
@@ -55,34 +55,14 @@ const apiKeyTooltip =
         >免费申请 API Key →</a
       >
     </p>
-    <p v-else class="api-key-card__footer api-key-card__footer--ok">
-      <svg
-        class="api-key-card__check"
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        aria-hidden="true"
-      >
-        <circle cx="8" cy="8" r="7" fill="var(--tp-success)" opacity="0.15" />
-        <path
-          d="M5 8.2 7 10.2 11 6.2"
-          fill="none"
-          stroke="var(--tp-success)"
-          stroke-width="1.6"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
-      已配置，可继续导入 GPX 并生成地形
-    </p>
   </section>
 </template>
 
 <style scoped>
 .api-key-card {
-  margin: 8px 16px 0;
-  padding: 14px 14px 12px;
-  border-radius: 12px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
   border: 1.5px solid transparent;
   background: var(--tp-bg-panel);
   box-shadow: var(--tp-shadow-panel);
@@ -109,8 +89,12 @@ const apiKeyTooltip =
 .api-key-card__head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.api-key-card--ready .api-key-card__head {
+  margin-bottom: 6px;
 }
 
 .api-key-card__badge {
@@ -138,7 +122,7 @@ const apiKeyTooltip =
 
 .api-key-card__title {
   margin: 0;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.25;
   color: var(--tp-text-primary);
@@ -153,10 +137,10 @@ const apiKeyTooltip =
 
 .api-key-card__input {
   width: 100%;
-  padding: 11px 12px;
+  padding: 8px 10px;
   border: 1.5px solid var(--tp-border-strong);
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.02em;
   background: #fff;
@@ -187,22 +171,14 @@ const apiKeyTooltip =
   align-items: center;
   flex-wrap: wrap;
   gap: 4px 8px;
-  margin: 8px 0 0;
-  font-size: 12px;
+  margin: 6px 0 0;
+  font-size: 11px;
   line-height: 1.4;
 }
 
 .api-key-card__footer--warn {
   color: #b45309;
   font-weight: 500;
-}
-
-.api-key-card__footer--ok {
-  color: var(--tp-text-secondary);
-}
-
-.api-key-card__check {
-  flex-shrink: 0;
 }
 
 .api-key-card__link {

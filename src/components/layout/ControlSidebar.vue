@@ -111,13 +111,10 @@ function openPreviewModal(): void {
       />
     </header>
 
-    <OpenTopoApiKeyCard />
-
-    <GpxImportSummary />
-
-    <div class="sidebar__divider" role="separator" />
-
     <div class="sidebar__scroll">
+      <OpenTopoApiKeyCard />
+      <GpxImportSummary />
+      <div class="sidebar__divider" role="separator" />
       <MapSizeSection />
       <TerrainSection />
       <TrailSection />
@@ -189,7 +186,7 @@ function openPreviewModal(): void {
   flex-shrink: 0;
   align-self: stretch;
   display: grid;
-  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   background: var(--tp-bg-panel);
   border-radius: var(--tp-radius-panel);
@@ -255,7 +252,6 @@ function openPreviewModal(): void {
 
 .sidebar__divider {
   height: 1px;
-  margin: 8px 20px 0;
   background: var(--tp-border);
 }
 

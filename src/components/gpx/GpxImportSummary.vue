@@ -15,26 +15,25 @@ const gpx = computed(() => config.value.gpx)
     <p class="gpx-summary__title">{{ gpx.trackName || gpx.fileName || '已导入轨迹' }}</p>
     <p class="gpx-summary__meta">
       {{ gpx.pointCount }} 个点 · 约 {{ gpx.distanceKm.toFixed(2) }} km
-    </p>
-    <p v-if="gpx.bounds" class="gpx-summary__bounds">
-      范围 {{ gpx.bounds.minLat.toFixed(4) }}°–{{ gpx.bounds.maxLat.toFixed(4) }}°，
-      {{ gpx.bounds.minLon.toFixed(4) }}°–{{ gpx.bounds.maxLon.toFixed(4) }}°
+      <template v-if="gpx.bounds">
+        · {{ gpx.bounds.minLat.toFixed(2) }}°–{{ gpx.bounds.maxLat.toFixed(2) }}°
+      </template>
     </p>
   </div>
 </template>
 
 <style scoped>
 .gpx-summary {
-  margin: 8px 20px;
-  padding: 10px 12px;
+  margin: 0;
+  padding: 8px 10px;
   background: var(--tp-bg-input);
   border-radius: var(--tp-radius-control);
   font-size: 12px;
 }
 
 .gpx-summary--error {
-  margin: 8px 20px;
-  padding: 10px 12px;
+  margin: 0;
+  padding: 8px 10px;
   background: #fff0f0;
   border-radius: var(--tp-radius-control);
   font-size: 12px;
@@ -43,20 +42,17 @@ const gpx = computed(() => config.value.gpx)
 }
 
 .gpx-summary__title {
-  margin: 0 0 4px;
+  margin: 0 0 2px;
   font-size: 13px;
   font-weight: 600;
   color: var(--tp-text-primary);
+  line-height: 1.3;
 }
 
 .gpx-summary__meta {
   margin: 0;
   color: var(--tp-text-secondary);
-}
-
-.gpx-summary__bounds {
-  margin: 4px 0 0;
-  color: var(--tp-text-secondary);
   font-size: 11px;
+  line-height: 1.35;
 }
 </style>
