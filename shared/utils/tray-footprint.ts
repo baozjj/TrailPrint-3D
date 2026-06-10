@@ -1,5 +1,6 @@
 import type { AppConfig, BaseShape } from "../types/config";
 import { physicalFootprintMm } from "./crop-region";
+import { regularPolygonVertexAngleRad } from "./footprint";
 
 export interface Vec2 {
   x: number;
@@ -24,7 +25,7 @@ export interface TrayFootprint {
 function regularPolygonVertices(n: number, radius: number): Vec2[] {
   const verts: Vec2[] = [];
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const a = regularPolygonVertexAngleRad(i, n);
     verts.push({ x: radius * Math.cos(a), y: radius * Math.sin(a) });
   }
   return verts;

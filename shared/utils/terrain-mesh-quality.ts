@@ -3,6 +3,7 @@ import type {
   TerrainMeshQuality,
   TerrainMeshQualityCustom,
 } from "../types/config";
+import { regularPolygonFootprintMm } from "./footprint";
 
 export type { TerrainMeshQuality };
 
@@ -167,11 +168,12 @@ export function estimatePrintFootprintMm(mapCrop: MapCropConfig): {
   if (mapCrop.shape === "rectangle") {
     return { widthMm: mapCrop.lengthMm, heightMm: mapCrop.widthMm };
   }
-  const n = Math.max(3, mapCrop.polygonSides);
-  const side = mapCrop.polygonSideLengthMm;
-  const r = side / (2 * Math.sin(Math.PI / n));
-  const d = r * 2;
-  return { widthMm: d, heightMm: d };
+  const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
+  const { widthMm, heightMm } = regularPolygonFootprintMm(
+    mapCrop.polygonSideLengthMm,
+    n,
+  );
+  return { widthMm, heightMm };
 }
 
 export function meshQualitySummary(

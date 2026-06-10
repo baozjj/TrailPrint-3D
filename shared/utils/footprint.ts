@@ -20,6 +20,52 @@ function pointInPolygon(
   return inside;
 }
 
+/** 正多边形顶点方位角 (rad)：上边为水平边（flat-top），非尖角朝上 */
+export function regularPolygonVertexAngleRad(
+  vertexIndex: number,
+  sides: number,
+): number {
+  return (
+    (vertexIndex / sides) * Math.PI * 2 - Math.PI / 2 + Math.PI / sides
+  );
+}
+
+/** 正多边形外接圆半径 (mm) */
+export function regularPolygonCircumradiusMm(
+  sideLengthMm: number,
+  sides: number,
+): number {
+  const n = Math.max(3, sides);
+  return sideLengthMm / (2 * Math.sin(Math.PI / n));
+}
+
+/** 正多边形轴对齐外接框 (mm)，与 flat-top 顶点方位一致 */
+export function regularPolygonFootprintMm(
+  sideLengthMm: number,
+  sides: number,
+): { widthMm: number; heightMm: number; radiusMm: number } {
+  const n = Math.max(3, Math.min(8, Math.round(sides)));
+  const radiusMm = regularPolygonCircumradiusMm(sideLengthMm, n);
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const a = regularPolygonVertexAngleRad(i, n);
+    const x = radiusMm * Math.cos(a);
+    const y = radiusMm * Math.sin(a);
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+  }
+  return {
+    widthMm: maxX - minX,
+    heightMm: maxY - minY,
+    radiusMm,
+  };
+}
+
 export function buildFootprintPolygonMm(
   crop: TerrainCropRegion,
 ): Array<{ x: number; y: number }> | null {
@@ -28,7 +74,7 @@ export function buildFootprintPolygonMm(
     const r = crop.radiusMm ?? crop.widthMm / 2;
     const verts: Array<{ x: number; y: number }> = [];
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      const a = regularPolygonVertexAngleRad(i, n);
       verts.push({ x: r * Math.cos(a), y: r * Math.sin(a) });
     }
     return verts;

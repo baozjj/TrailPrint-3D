@@ -1,4 +1,5 @@
 import type { MapCropConfig } from "../types/config";
+import { regularPolygonVertexAngleRad } from "./footprint";
 
 /**
  * 地图中心遮罩约占视窗短边的比例（屏幕像素，与打印 mm 无关）。
@@ -57,7 +58,7 @@ export function buildMaskGeometry(
   const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
   const vertices: Array<{ x: number; y: number }> = [];
   for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const a = regularPolygonVertexAngleRad(i, n);
     vertices.push({
       x: cx + baseR * Math.cos(a),
       y: cy + baseR * Math.sin(a),

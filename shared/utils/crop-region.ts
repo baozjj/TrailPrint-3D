@@ -1,5 +1,6 @@
 import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
+import { regularPolygonFootprintMm } from "./footprint";
 import { buildMaskGeometry, type MaskScreenGeometry } from "./mask-geometry";
 import { unprojectPoint } from "./map-projection";
 
@@ -19,9 +20,7 @@ export function physicalFootprintMm(mapCrop: MapCropConfig): {
     };
   }
   const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
-  const side = mapCrop.polygonSideLengthMm;
-  const r = side / (2 * Math.sin(Math.PI / n));
-  return { widthMm: r * 2, heightMm: r * 2, radiusMm: r };
+  return regularPolygonFootprintMm(mapCrop.polygonSideLengthMm, n);
 }
 
 function maskBoundaryPoints(

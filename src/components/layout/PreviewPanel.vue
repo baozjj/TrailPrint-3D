@@ -34,6 +34,7 @@ const terrainGen = useTerrainGeneration(modalViewport, {
 const trayGen = useTrayGeneration();
 
 const { regenerate: regenerateTerrain } = terrainGen;
+const { regenerate: regenerateTray } = trayGen;
 const terrainResult = toRef(terrainGen, "lastResult");
 const terrainGenerating = toRef(terrainGen, "generating");
 const terrainError = toRef(terrainGen, "error");
@@ -90,6 +91,7 @@ function resetMapView(): void {
 
 function onTerrainModalOpened(): void {
   void regenerateTerrain();
+  void regenerateTray();
 }
 
 async function onDrop(e: DragEvent): Promise<void> {
