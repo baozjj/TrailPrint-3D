@@ -26,23 +26,24 @@ cd TrailPrint-3D
 # 安装依赖
 npm install
 
-# 配置环境变量（见下方说明）
-cp .env.example .env
-
 # 启动开发模式（会打开 Electron 窗口）
 npm run dev
 ```
 
-### 环境变量
+### OpenTopography API Key
 
-复制 `.env.example` 为 `.env`，并填入 [OpenTopography](https://portal.opentopography.org/requestService?service=api) API Key。地形高程数据依赖该服务：
+地形高程数据来自 [OpenTopography](https://portal.opentopography.org/requestService?service=api)。启动应用后，在侧栏顶部的 **OpenTopography API Key** 卡片中填写你的 Key（[免费注册申请](https://portal.opentopography.org/requestService?service=api)）。Key 仅保存在本机，不会随仓库分发。
+
+### 可选环境变量
+
+复制 `.env.example` 为 `.env` 可配置开发用选项。API Key 也可通过环境变量预填（非必需）：
 
 ```bash
 OPENTOPOGRAPHY_API_KEY=你的密钥
 VITE_OPENTOPOGRAPHY_API_KEY=你的密钥
 ```
 
-可选：高精度制版或自定义分辨率较大时，可提高 V8 堆内存上限（单位 MB，默认 8192）：
+高精度制版或自定义分辨率较大时，可提高 V8 堆内存上限（单位 MB，默认 8192）：
 
 ```bash
 TRAILPRINT_HEAP_MB=8192

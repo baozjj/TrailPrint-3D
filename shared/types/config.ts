@@ -55,7 +55,7 @@ export interface TerrainConfig {
   smoothing: TerrainSmoothing;
   /** OpenTopography 数据集，见 shared/types/dem.ts */
   demDataset: OpenTopoDemType;
-  /** OpenTopography API Key（可由 .env 注入） */
+  /** OpenTopography API Key（在应用面板填写，可选由 .env 预填） */
   openTopographyApiKey: string;
 }
 

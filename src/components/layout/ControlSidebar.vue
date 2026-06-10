@@ -7,6 +7,7 @@ import { useGpxImport } from '@/composables/useGpxImport'
 import { formatIpcError, ipcOnExportProgress, ipcRevealExport } from '@/ipc/client'
 import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
+import OpenTopoApiKeyCard from '@/components/sections/OpenTopoApiKeyCard.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
 import TrailSection from '@/components/sections/TrailSection.vue'
@@ -105,6 +106,8 @@ function openPreviewModal(): void {
         @change="onGpxSelected"
       />
     </header>
+
+    <OpenTopoApiKeyCard />
 
     <GpxImportSummary />
 

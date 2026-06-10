@@ -98,6 +98,7 @@ const demHint = computed(() => {
   );
   return found?.hint ?? "";
 });
+
 </script>
 
 <template>
@@ -203,4 +204,5 @@ const demHint = computed(() => {
   line-height: 1.4;
   color: var(--tp-text-secondary);
 }
+
 </style>

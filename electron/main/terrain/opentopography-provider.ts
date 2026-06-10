@@ -17,7 +17,7 @@ export function resolveOpenTopoApiKey(fromConfig: string): string {
   if (!key) {
     throw new IpcException(
       "DEM_API_KEY_REQUIRED",
-      "未配置 OpenTopography API Key，请在 .env 中设置 OPENTOPOGRAPHY_API_KEY",
+      "未配置 OpenTopography API Key，请在侧栏顶部填写",
     );
   }
   return key;
