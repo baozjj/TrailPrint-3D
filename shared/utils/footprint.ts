@@ -255,11 +255,9 @@ export function clipPolylineToFootprint(
   return out;
 }
 
-/** STL 用 Trail_Line 宽度：标称宽度减去两侧装配公差 */
+/** STL 用 Trail_Line 宽度：与侧栏「轨迹宽度」一致（装配公差仅扩大主模型凹槽） */
 export function trailLineWidthMmForPrint(config: AppConfig): number {
-  const shrunk =
-    config.trail.trailWidthMm - 2 * config.assembly.trailToleranceMm;
-  return Math.max(0.2, shrunk);
+  return Math.max(0.2, config.trail.trailWidthMm);
 }
 
 /** 轨迹顶面高出主模型对应地表的高度 (mm) */

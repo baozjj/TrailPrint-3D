@@ -42,6 +42,9 @@ const showCircleMagnetCount = computed(
     :open="openSections.assembly"
     @toggle="ui.toggleSection('assembly')"
   >
+    <p class="hint">
+      轨迹槽公差仅加宽主模型凹槽，便于嵌入轨迹件；导出的轨迹宽度仍与「轨迹设置」中的宽度一致。
+    </p>
     <div class="row">
       <NumberField
         v-model="config.assembly.trailToleranceMm"

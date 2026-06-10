@@ -28,7 +28,7 @@
 
 ## 装配公差
 
-- [ ] 默认 `trailToleranceMm=0.15`：`Trail_Line` 宽度 ≈ 轨迹宽度 − 0.3mm（相对预览轨迹略窄）
+- [ ] 默认 `trailToleranceMm=0.15`：`Trail_Line` 宽度 = 轨迹宽度；主模型凹槽宽度 ≈ 轨迹宽度 + 0.3mm
 - [ ] 增大托盘公差后 `Tray_Base` 凹槽相对主模型外轮廓变大（切片截面或测量）
 
 ## 磁铁孔（可选）

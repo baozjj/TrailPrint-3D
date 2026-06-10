@@ -68,7 +68,7 @@ export interface TerrainGenerateRequest {
   trailGroove?: TrailGrooveSpec;
   /**
    * Trail_Line 实体宽度 (mm)。未指定时使用 config.trail.trailWidthMm。
-   * STL 导出时应传入「轨迹宽度 − 2×装配公差」以适配凹槽。
+   * 装配公差仅扩大主模型凹槽，不缩小轨迹件宽度。
    */
   trailLineWidthMm?: number;
 }
