@@ -32,9 +32,18 @@ const props = defineProps<{
   overlayLoading?: boolean;
 }>();
 
+const emit = defineEmits<{
+  "scene-loading-change": [loading: boolean];
+}>();
+
 const containerRef = ref<HTMLDivElement | null>(null);
 const statusHint = ref<string | null>(null);
 const imageryLoading = ref(false);
+const sceneBuilding = ref(false);
+
+function syncSceneLoading(): void {
+  emit("scene-loading-change", sceneBuilding.value || imageryLoading.value);
+}
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene | null = null;
@@ -101,6 +110,8 @@ async function rebuildScene(): Promise<void> {
   if (!trayRoot || !terrainRoot || !overlayRoot || !camera || !controls) return;
 
   const token = ++rebuildToken;
+  sceneBuilding.value = true;
+  syncSceneLoading();
 
   disposeMeshGeometries(trayRoot);
   disposeMeshGeometries(terrainRoot);
@@ -115,11 +126,17 @@ async function rebuildScene(): Promise<void> {
   disposeSatelliteTexture();
 
   const r = props.result;
-  if (!r?.heightPreview || !r.crop) return;
+  if (!r?.heightPreview || !r.crop) {
+    sceneBuilding.value = false;
+    syncSceneLoading();
+    return;
+  }
 
   const preview = r.heightPreview;
   if (preview.heights.length < preview.cols * preview.rows) {
     statusHint.value = "高度场数据不完整";
+    sceneBuilding.value = false;
+    syncSceneLoading();
     return;
   }
 
@@ -128,6 +145,8 @@ async function rebuildScene(): Promise<void> {
   if (!terrainGeo.getIndex()?.count) {
     statusHint.value = "山体网格为空";
     terrainGeo.dispose();
+    sceneBuilding.value = false;
+    syncSceneLoading();
     return;
   }
 
@@ -178,7 +197,10 @@ async function rebuildScene(): Promise<void> {
     mat.needsUpdate = true;
     statusHint.value = "卫星影像加载失败，已使用地形着色";
   } finally {
-    if (token === rebuildToken) imageryLoading.value = false;
+    if (token === rebuildToken) {
+      imageryLoading.value = false;
+      syncSceneLoading();
+    }
   }
 
   if (token !== rebuildToken) return;
@@ -236,6 +258,11 @@ async function rebuildScene(): Promise<void> {
   const fitTargets: THREE.Object3D[] = [terrainMesh, overlayRoot];
   if (trayRoot.children.length > 0) fitTargets.unshift(trayRoot);
   fitCameraToTerrain(camera, controls, ...fitTargets);
+
+  if (token === rebuildToken) {
+    sceneBuilding.value = false;
+    syncSceneLoading();
+  }
 }
 
 function resize(): void {
@@ -372,41 +399,54 @@ onUnmounted(() => {
   disposeThree();
 });
 
-defineExpose({ imageryLoading });
+defineExpose({ imageryLoading, sceneBuilding });
 </script>
 
 <template>
   <div class="terrain-preview">
     <div ref="containerRef" class="terrain-preview__viewport" />
     <div
-      v-if="imageryLoading && !overlayLoading"
+      v-if="!overlayLoading && imageryLoading"
       class="terrain-preview__badge terrain-preview__badge--load"
     >
       正在加载卫星影像贴图…
     </div>
     <div
-      v-else-if="generating && !overlayLoading"
+      v-else-if="!overlayLoading && sceneBuilding"
+      class="terrain-preview__badge terrain-preview__badge--load"
+    >
+      正在构建 3D 网格…
+    </div>
+    <div
+      v-else-if="!overlayLoading && generating"
       class="terrain-preview__badge"
     >
       正在生成山体 3D 模型…
     </div>
     <div
-      v-else-if="error"
+      v-else-if="!overlayLoading && error"
       class="terrain-preview__badge terrain-preview__badge--err"
     >
       {{ error }}
     </div>
     <div
-      v-else-if="statusHint"
+      v-else-if="!overlayLoading && statusHint"
       class="terrain-preview__badge terrain-preview__badge--err"
     >
       {{ statusHint }}
     </div>
-    <div v-else-if="!result" class="terrain-preview__badge">
+    <div v-else-if="!overlayLoading && !result" class="terrain-preview__badge">
       导入 GPX 后打开 3D 预览，将显示卫星影像贴图与真实地形
     </div>
     <div
-      v-else-if="demLabel"
+      v-else-if="
+        demLabel &&
+        !sceneBuilding &&
+        !imageryLoading &&
+        !generating &&
+        !error &&
+        !statusHint
+      "
       class="terrain-preview__badge terrain-preview__badge--dim"
     >
       {{ demLabel }}

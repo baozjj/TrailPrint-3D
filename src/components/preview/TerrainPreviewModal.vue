@@ -23,10 +23,34 @@ const emit = defineEmits<{
 }>();
 
 const canDownload = computed(
-  () => !props.generating && !props.downloading && props.result != null && !props.error,
+  () =>
+    !props.generating &&
+    !props.downloading &&
+    !sceneLoading.value &&
+    props.result != null &&
+    !props.error,
 );
 
 const bodyRef = ref<HTMLDivElement | null>(null);
+const sceneLoading = ref(false);
+
+const showLoadingOverlay = computed(
+  () => props.generating || sceneLoading.value,
+);
+
+const loadingTitle = computed(() =>
+  props.generating ? "正在生成 3D 模型" : "正在加载 3D 预览",
+);
+
+const loadingHint = computed(() =>
+  props.generating
+    ? "正在获取 DEM 高程、拼接卫星影像并构建 3D 网格，请稍候…"
+    : "正在构建山体网格并加载卫星影像贴图，完成后即可交互…",
+);
+
+function onSceneLoadingChange(loading: boolean): void {
+  sceneLoading.value = loading;
+}
 
 let resizeObserver: ResizeObserver | null = null;
 
@@ -41,7 +65,10 @@ function syncViewport(): void {
 }
 
 watch(open, async (isOpen) => {
-  if (!isOpen) return;
+  if (!isOpen) {
+    sceneLoading.value = false;
+    return;
+  }
   await Promise.resolve();
   syncViewport();
   emit("opened");
@@ -145,22 +172,51 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
           </header>
 
           <div ref="bodyRef" class="terrain-modal__body">
-            <div v-if="generating" class="terrain-modal__loading">
+            <div v-if="showLoadingOverlay" class="terrain-modal__loading">
               <div class="terrain-modal__spinner" aria-hidden="true" />
-              <p class="terrain-modal__loading-title">正在生成 3D 模型</p>
-              <p class="terrain-modal__loading-hint">
-                正在获取 DEM 高程、拼接卫星影像并构建 3D 网格，请稍候…
-              </p>
+              <p class="terrain-modal__loading-title">{{ loadingTitle }}</p>
+              <p class="terrain-modal__loading-hint">{{ loadingHint }}</p>
+            </div>
+
+            <div v-else-if="error" class="terrain-modal__error">
+              <svg
+                class="terrain-modal__error-icon"
+                width="40"
+                height="40"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M12 8v5M12 16h.01"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                />
+              </svg>
+              <p class="terrain-modal__error-title">3D 模型生成失败</p>
+              <p class="terrain-modal__error-message">{{ error }}</p>
             </div>
 
             <TerrainMeshPreview
               class="terrain-modal__preview"
-              :class="{ 'terrain-modal__preview--dim': generating }"
+              :class="{
+                'terrain-modal__preview--hidden':
+                  showLoadingOverlay || Boolean(error),
+              }"
               :result="result"
               :tray-mesh="trayMesh"
               :generating="generating"
               :error="error"
               overlay-loading
+              @scene-loading-change="onSceneLoadingChange"
             />
           </div>
         </div>
@@ -316,9 +372,43 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   inset: 0;
 }
 
-.terrain-modal__preview--dim {
-  opacity: 0.35;
+.terrain-modal__preview--hidden {
+  visibility: hidden;
   pointer-events: none;
+}
+
+.terrain-modal__error {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  background: #1a1c2e;
+}
+
+.terrain-modal__error-icon {
+  color: #e57373;
+}
+
+.terrain-modal__error-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.terrain-modal__error-message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.65);
+  text-align: center;
+  max-width: 420px;
+  word-break: break-word;
 }
 
 .terrain-modal-enter-active,
