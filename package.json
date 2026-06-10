@@ -1,7 +1,7 @@
 {
   "name": "trailprint-3d",
   "version": "0.1.0",
-  "description": "迹印 TrailPrint 3D — GPX 轨迹转 3D 地形纪念碑",
+  "description": "印迹 TrailPrint 3D — GPX 轨迹转 3D 地形纪念碑",
   "main": "./out/main/index.js",
   "author": "TrailPrint",
   "license": "MIT",

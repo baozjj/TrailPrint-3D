@@ -1,6 +1,6 @@
 # Role & Task
 
-You are an expert Frontend Engineer and UI/UX Designer specializing in the Apple Human Interface Guidelines (HIG). Your task is to generate the UI for a web application named "迹印 TrailPrint 3D" based on my instructions.
+You are an expert Frontend Engineer and UI/UX Designer specializing in the Apple Human Interface Guidelines (HIG). Your task is to generate the UI for a web application named "印迹 TrailPrint 3D" based on my instructions.
 
 # Language Requirement ⚠️
 
@@ -8,7 +8,7 @@ You are an expert Frontend Engineer and UI/UX Designer specializing in the Apple
 
 # App Concept
 
-"迹印 TrailPrint 3D" is a premium tool that converts GPX trail data into a 3D-printable terrain monument. The UI must feel like a native macOS or iPadOS app: minimalist, elegant, professional, and intuitive.
+"印迹 TrailPrint 3D" is a premium tool that converts GPX trail data into a 3D-printable terrain monument. The UI must feel like a native macOS or iPadOS app: minimalist, elegant, professional, and intuitive.
 
 # Design System & Styling (Apple Style)
 
@@ -36,7 +36,7 @@ Please build a layout with two main areas:
 ## Area 2: The Control Sidebar (Left, Floating)
 
 - A floating panel with a subtle shadow (`shadow-2xl`), glassmorphism, and scrollable content (`overflow-y-auto`).
-- Include a sleek header with the title "迹印 TrailPrint 3D" and an "导入 GPX" button.
+- Include a sleek header with the title "印迹 TrailPrint 3D" and an "导入 GPX" button.
 - Organize the configuration into an **Accordion (Collapsible Panels)**.
 
 ### Sidebar Content (Map to these 5 modules in Chinese):

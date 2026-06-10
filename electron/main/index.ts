@@ -36,7 +36,7 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    title: '迹印 TrailPrint 3D',
+    title: '印迹 TrailPrint 3D',
     webPreferences: {
       preload: resolvePreloadPath(),
       sandbox: false,

@@ -8,6 +8,7 @@ import { formatIpcError, ipcOnExportProgress, ipcRevealExport } from '@/ipc/clie
 import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import OpenTopoApiKeyCard from '@/components/sections/OpenTopoApiKeyCard.vue'
+import TrailPrintLogo from '@/components/ui/TrailPrintLogo.vue'
 import MapSizeSection from '@/components/sections/MapSizeSection.vue'
 import TerrainSection from '@/components/sections/TerrainSection.vue'
 import TrailSection from '@/components/sections/TrailSection.vue'
@@ -82,8 +83,11 @@ function openPreviewModal(): void {
   <aside class="sidebar">
     <header class="sidebar__header">
       <div class="sidebar__brand">
-        <h1 class="sidebar__title">迹印</h1>
-        <p class="sidebar__subtitle">TrailPrint 3D</p>
+        <TrailPrintLogo :size="36" />
+        <div class="sidebar__brand-text">
+          <h1 class="sidebar__title">印迹</h1>
+          <p class="sidebar__subtitle">TrailPrint 3D</p>
+        </div>
       </div>
       <button
         type="button"
@@ -204,6 +208,13 @@ function openPreviewModal(): void {
 }
 
 .sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar__brand-text {
   display: flex;
   flex-direction: column;
   gap: 2px;

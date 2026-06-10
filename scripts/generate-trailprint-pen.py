@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate 迹印 TrailPrint 3D main UI .pen file from UI文档.md spec."""
+"""Generate 印迹 TrailPrint 3D main UI .pen file from UI文档.md spec."""
 
 import json
 import random
@@ -7,7 +7,7 @@ import string
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "迹印-TrailPrint-3D.pen"
+OUT = ROOT / "印迹-TrailPrint-3D.pen"
 
 SCREEN_W = 1440
 SCREEN_H = 900
@@ -553,7 +553,7 @@ def build_document() -> dict:
                                 "layout": "vertical",
                                 "gap": 2,
                                 "children": [
-                                    text_node("迹印", size=22, weight="700"),
+                                    text_node("印迹", size=22, weight="700"),
                                     text_node("TrailPrint 3D", size=12, fill="#86868B"),
                                 ],
                             },
@@ -738,7 +738,7 @@ def build_document() -> dict:
         "id": nid(),
         "x": 0,
         "y": 0,
-        "name": "迹印 TrailPrint 3D — 主界面",
+        "name": "印迹 TrailPrint 3D — 主界面",
         "clip": True,
         "width": SCREEN_W,
         "height": SCREEN_H,
