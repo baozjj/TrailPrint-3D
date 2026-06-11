@@ -1,8 +1,17 @@
 # 🏔️ 印迹 TrailPrint 3D
 
-**将徒步轨迹导出为可 3D 打印的地形模型。**
+**将徒步轨迹（GPX）导出为可 3D 打印的地形模型 · GPX to 3D printable terrain**
 
-「印迹 TrailPrint 3D」是一款桌面工具，用于把 GPX 运动轨迹与真实地形高程结合，生成可直接用于多色 3D 打印的 STL 模型。上传轨迹后，可在地图上调整取景范围，设置打印尺寸与地形参数，并导出分件模型。
+「印迹 TrailPrint 3D」是一款开源桌面工具，用于把 GPX 运动轨迹与真实地形高程（DEM）结合，生成可直接用于多色 3D 打印的 STL 模型。支持从 [两步路](https://www.2bulu.com/)导出的 `.gpx` 文件；上传轨迹后，可在地图上调整取景范围，设置打印尺寸与地形参数，并导出分件模型——无需手动 3D 建模。
+
+> **English:** TrailPrint 3D converts GPX hiking and running tracks into multi-part STL terrain models for FDM 3D printing. It fetches real elevation data (via [OpenTopography](https://portal.opentopography.org/)), exports terrain mesh, trail line, and tray base — ready for [Bambu Studio](https://bambulab.com/en/download/studio) or any slicer. GPX to STL · hiking trail 3D print · terrain relief model · printable topographic map.
+
+### 适用场景
+
+- **徒步 / 越野跑纪念品**：走完西湖爱心线、武功山、麦理浩径、虎跳峡等路线，把轨迹「印」成一座可摆放的地形模型
+- **GPX 转 STL**：导入轨迹文件，自动生成 `Terrain_Main.stl`（山体）、`Trail_Line.stl`（路线）、`Tray_Base.stl`（托盘底座）
+- **多色 3D 打印**：分件导出，适配拓竹（Bambu Lab）等多色 FDM 打印机；轨迹凹槽 + 独立线条换色，磁吸孔位免胶水拼装
+- **地形浮雕摆件**：可调山体高度、表面平滑、画框式底座，弥补缩放到桌面尺寸后地形起伏不明显的问题
 
 > 如果这个项目对你有帮助，欢迎在页面右上角点个 **Star** ⭐ —— 方便你跟进后续更新，也能让更多人发现它。
 
