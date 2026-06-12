@@ -233,7 +233,7 @@ function collectTrailSamples(
   const useFlatFloor =
     flatFloor != null && Number.isFinite(flatFloor) && depthMm > 0;
   const zOffset = opts.zTopOffsetMm ?? 0;
-  const minThicknessMm = Math.max(zOffset, 0.05);
+  const grooveDepthMm = Math.max(0.05, depthMm);
 
   for (const p of path) {
     if (useFlatFloor) {
@@ -247,7 +247,11 @@ function collectTrailSamples(
         crop,
         zBot,
       );
-      const zTop = Math.max(zSurface + zOffset, zBot + minThicknessMm);
+      // 顶面贴挖槽前地表 + 高出量；至少填满凹槽深度（floorZ + trailDepth + 高出量）
+      const zTop = Math.max(
+        zSurface + zOffset,
+        zBot + grooveDepthMm + zOffset,
+      );
       samples.push({ x: p.x, y: p.y, zTop, zBot });
       continue;
     }
@@ -261,7 +265,7 @@ function collectTrailSamples(
       0,
     );
     const zTop = zBase + zOffset;
-    samples.push({ x: p.x, y: p.y, zTop, zBot: zTop - depthMm });
+    samples.push({ x: p.x, y: p.y, zTop, zBot: zBase - grooveDepthMm });
   }
   return samples;
 }

@@ -20,7 +20,6 @@ import { applyGrooveToHeightField } from "./trail-groove";
 import { imprintGrooveOnTerrainMesh } from "@shared/utils/trail-groove-imprint";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import {
-  trailLineDepthMmForPrint,
   trailLineWidthMmForPrint,
   trailHeightAboveMainMm,
 } from "@shared/utils/footprint";
@@ -220,7 +219,7 @@ export async function generateTerrainMain(
     trailMesh = buildTrailLineMesh({
       polylineMm: trailPolylineMm,
       widthMm: printWidth,
-      depthMm: trailLineDepthMmForPrint(config),
+      depthMm: config.trail.trailDepthMm,
       heightMm: surfaceForTrail,
       cols,
       rows,
