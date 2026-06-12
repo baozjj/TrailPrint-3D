@@ -12,7 +12,7 @@ import {
 import { IpcException } from "@shared/ipc/types";
 import { magnetCutDimensionsMm } from "@shared/utils/magnet-hole-geometry";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
-import { buildTrayBaseMeshCsg } from "./tray-csg-mesh";
+import { buildTrayBaseMeshForExport } from "./tray-export-mesh";
 
 export async function generateTrayBase(
   req: TrayGenerateRequest,
@@ -55,7 +55,7 @@ export async function generateTrayBase(
     ? magnetCutDimensionsMm(config.assembly.magnet)
     : null;
 
-  const mesh = buildTrayBaseMeshCsg(
+  const mesh = buildTrayBaseMeshForExport(
     footprint,
     config.tray,
     magnetCut

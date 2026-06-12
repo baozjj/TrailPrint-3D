@@ -86,8 +86,8 @@ export interface TrayMagnetCutSpec {
 }
 
 /**
- * CSG 托盘实体：外轮廓实心块 − 主模型凹槽 − 底部磁铁盲孔。
- * 差集后内腔与孔壁均为封闭水密面，适合预览与 STL 导出。
+ * CSG 托盘实体（旧路径，预览/调试保留）。
+ * 导出 STL 请使用 {@link buildTrayBaseMeshForExport}（手工封闭体 + ShapeGeometry 底面）。
  */
 export function buildTrayBaseMeshCsg(
   footprint: TrayFootprint,

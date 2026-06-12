@@ -1,24 +1,27 @@
 import type { TerrainMeshPayload } from "@shared/types/terrain";
+import * as THREE from "three";
 import {
   magnetHexagonVertsMm,
   magnetHoleInteriorSample,
 } from "../../../shared/utils/magnet-hole-geometry";
 import type { Vec2 } from "@shared/utils/tray-footprint";
 
-const HOLE_WALL_SEGMENTS = 24;
-const BOTTOM_PLATE_CELL_MIN_MM = 1.2;
-const BOTTOM_PLATE_CELL_MAX_MM = 2.8;
-const BOTTOM_GRID_SUBDIVIDE_MAX = 4;
+const VERTEX_SNAP_MM = 1e-4;
 
-function pushVertex(
-  positions: number[],
-  x: number,
-  y: number,
-  z: number,
-): number {
-  const idx = positions.length / 3;
-  positions.push(x, y, z);
-  return idx;
+class VertexCache {
+  private readonly map = new Map<string, number>();
+
+  constructor(private readonly positions: number[]) {}
+
+  getOrCreate(x: number, y: number, z: number): number {
+    const key = `${Math.round(x / VERTEX_SNAP_MM)},${Math.round(y / VERTEX_SNAP_MM)},${Math.round(z / VERTEX_SNAP_MM)}`;
+    const hit = this.map.get(key);
+    if (hit != null) return hit;
+    const idx = this.positions.length / 3;
+    this.positions.push(x, y, z);
+    this.map.set(key, idx);
+    return idx;
+  }
 }
 
 function pointInConvexPolygon(p: Vec2, poly: Vec2[]): boolean {
@@ -30,28 +33,6 @@ function pointInConvexPolygon(p: Vec2, poly: Vec2[]): boolean {
     if (cross < -1e-9) return false;
   }
   return true;
-}
-
-function insideHoleOpening(
-  x: number,
-  y: number,
-  holes: ReadonlyArray<{ x: number; y: number }>,
-  radius: number,
-): boolean {
-  const limitSq = radius * radius;
-  for (const h of holes) {
-    const dx = x - h.x;
-    const dy = y - h.y;
-    if (dx * dx + dy * dy < limitSq) return true;
-  }
-  return false;
-}
-
-function bottomPlateCellSize(holeRadius: number): number {
-  return Math.max(
-    BOTTOM_PLATE_CELL_MIN_MM,
-    Math.min(BOTTOM_PLATE_CELL_MAX_MM, holeRadius * 0.42),
-  );
 }
 
 function pointInTri2D(
@@ -76,126 +57,67 @@ function pointInTri2D(
   return !(hasNeg && hasPos);
 }
 
-function triangleCoversHoleOpening(
-  i0: number,
-  i1: number,
-  i2: number,
-  pos: number[],
-  holes: ReadonlyArray<{ x: number; y: number }>,
-  holeRadius: number,
-): boolean {
-  const samples = 8;
-  const testR = holeRadius * 0.55;
-  for (const h of holes) {
-    for (let k = 0; k < samples; k++) {
-      const a = (k / samples) * Math.PI * 2;
-      const px = h.x + testR * Math.cos(a);
-      const py = h.y + testR * Math.sin(a);
-      if (pointInTri2D(px, py, i0, i1, i2, pos)) return true;
-    }
-  }
-  return false;
-}
-
-function pushBottomTriangle(
-  positions: number[],
-  indices: number[],
-  i0: number,
-  i1: number,
-  i2: number,
-  holes: ReadonlyArray<{ x: number; y: number }>,
-  holeRadius: number,
-): void {
-  if (triangleCoversHoleOpening(i0, i1, i2, positions, holes, holeRadius)) {
-    return;
-  }
-  indices.push(i0, i1, i2);
-}
-
 /**
- * 铺满托盘底面（外轮廓内自适应网格），仅在磁铁孔圆域留空。
+ * 外轮廓 + 六边形孔底面（ShapeGeometry 约束三角剖分，与外轮廓顶点对齐）。
  */
-function buildBottomPlateGrid(
+function buildBottomPlateShape(
   outer: Vec2[],
   z: number,
   holes: ReadonlyArray<{ x: number; y: number }>,
   holeRadius: number,
-  positions: number[],
+  cache: VertexCache,
   indices: number[],
 ): void {
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-  for (const v of outer) {
-    minX = Math.min(minX, v.x);
-    maxX = Math.max(maxX, v.x);
-    minY = Math.min(minY, v.y);
-    maxY = Math.max(maxY, v.y);
-  }
-  const cell = bottomPlateCellSize(holeRadius);
-  const minCell = cell * 0.45;
+  if (outer.length < 3) return;
 
-  function emitQuad(x0: number, y0: number, x1: number, y1: number): void {
-    const i00 = pushVertex(positions, x0, y0, z);
-    const i10 = pushVertex(positions, x1, y0, z);
-    const i11 = pushVertex(positions, x1, y1, z);
-    const i01 = pushVertex(positions, x0, y1, z);
-    // 法线朝下（-Z）
-    pushBottomTriangle(positions, indices, i00, i10, i11, holes, holeRadius);
-    pushBottomTriangle(positions, indices, i00, i11, i01, holes, holeRadius);
+  const shape = new THREE.Shape();
+  shape.moveTo(outer[0]!.x, outer[0]!.y);
+  for (let i = 1; i < outer.length; i++) {
+    shape.lineTo(outer[i]!.x, outer[i]!.y);
+  }
+  shape.closePath();
+
+  for (const h of holes) {
+    const hex = magnetHexagonVertsMm(h.x, h.y, holeRadius);
+    const holePath = new THREE.Path();
+    holePath.moveTo(hex[0]!.x, hex[0]!.y);
+    for (let i = hex.length - 1; i >= 1; i--) {
+      holePath.lineTo(hex[i]!.x, hex[i]!.y);
+    }
+    holePath.closePath();
+    shape.holes.push(holePath);
   }
 
-  function fillRect(
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    depth: number,
-  ): void {
-    const cx = (x0 + x1) / 2;
-    const cy = (y0 + y1) / 2;
-    if (!pointInConvexPolygon({ x: cx, y: cy }, outer)) return;
-    if (insideHoleOpening(cx, cy, holes, holeRadius)) return;
-    if (x1 - x0 < minCell || y1 - y0 < minCell) return;
+  const geometry = new THREE.ShapeGeometry(shape);
+  const posAttr = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const indexAttr = geometry.getIndex();
+  if (!indexAttr) {
+    geometry.dispose();
+    return;
+  }
 
-    const corners: Vec2[] = [
-      { x: x0, y: y0 },
-      { x: x1, y: y0 },
-      { x: x1, y: y1 },
-      { x: x0, y: y1 },
-    ];
-    const allInside = corners.every(
-      (c) =>
-        pointInConvexPolygon(c, outer) &&
-        !insideHoleOpening(c.x, c.y, holes, holeRadius),
+  const vertMap = new Map<number, number>();
+  for (let i = 0; i < posAttr.count; i++) {
+    vertMap.set(
+      i,
+      cache.getOrCreate(posAttr.getX(i), posAttr.getY(i), z),
     );
-    if (allInside) {
-      emitQuad(x0, y0, x1, y1);
-      return;
-    }
-    if (depth >= BOTTOM_GRID_SUBDIVIDE_MAX) return;
-
-    const mx = (x0 + x1) / 2;
-    const my = (y0 + y1) / 2;
-    fillRect(x0, y0, mx, my, depth + 1);
-    fillRect(mx, y0, x1, my, depth + 1);
-    fillRect(mx, my, x1, y1, depth + 1);
-    fillRect(x0, my, mx, y1, depth + 1);
   }
 
-  for (let y = minY; y < maxY - 1e-6; y += cell) {
-    const y1 = Math.min(y + cell, maxY);
-    for (let x = minX; x < maxX - 1e-6; x += cell) {
-      const x1 = Math.min(x + cell, maxX);
-      fillRect(x, y, x1, y1, 0);
-    }
+  for (let t = 0; t < indexAttr.count; t += 3) {
+    const a = vertMap.get(indexAttr.getX(t))!;
+    const b = vertMap.get(indexAttr.getX(t + 1))!;
+    const c = vertMap.get(indexAttr.getX(t + 2))!;
+    // ShapeGeometry 法线 +Z，底面需朝 -Z
+    indices.push(a, c, b);
   }
+
+  geometry.dispose();
 }
 
-/** 单个磁铁盲孔：侧壁 + 孔底面（z=0 保持敞开） */
+/** 单个磁铁盲孔：六边形侧壁 + 孔底面；z=0 顶环与底面网格共享顶点 */
 function appendMagnetPocket(
-  positions: number[],
+  cache: VertexCache,
   indices: number[],
   cx: number,
   cy: number,
@@ -203,20 +125,13 @@ function appendMagnetPocket(
   zBottom: number,
   zTop: number,
 ): void {
-  const floorCenter = pushVertex(positions, cx, cy, zTop);
-  const bottomRing: number[] = [];
-  const topRing: number[] = [];
+  const hexVerts = magnetHexagonVertsMm(cx, cy, radius);
+  const bottomRing = hexVerts.map((v) => cache.getOrCreate(v.x, v.y, zBottom));
+  const topRing = hexVerts.map((v) => cache.getOrCreate(v.x, v.y, zTop));
+  const floorCenter = cache.getOrCreate(cx, cy, zTop);
 
-  for (let s = 0; s < HOLE_WALL_SEGMENTS; s++) {
-    const a = (s / HOLE_WALL_SEGMENTS) * Math.PI * 2;
-    const x = cx + radius * Math.cos(a);
-    const y = cy + radius * Math.sin(a);
-    bottomRing.push(pushVertex(positions, x, y, zBottom));
-    topRing.push(pushVertex(positions, x, y, zTop));
-  }
-
-  for (let s = 0; s < HOLE_WALL_SEGMENTS; s++) {
-    const sn = (s + 1) % HOLE_WALL_SEGMENTS;
+  for (let s = 0; s < hexVerts.length; s++) {
+    const sn = (s + 1) % hexVerts.length;
     const b0 = bottomRing[s]!;
     const b1 = bottomRing[sn]!;
     const t0 = topRing[s]!;
@@ -225,9 +140,9 @@ function appendMagnetPocket(
     indices.push(b0, t0, t1);
   }
 
-  for (let s = 0; s < HOLE_WALL_SEGMENTS; s++) {
-    const sn = (s + 1) % HOLE_WALL_SEGMENTS;
-    indices.push(floorCenter, topRing[s]!, topRing[sn]!);
+  for (let s = 0; s < hexVerts.length; s++) {
+    const sn = (s + 1) % hexVerts.length;
+    indices.push(floorCenter, topRing[sn]!, topRing[s]!);
   }
 }
 
@@ -328,19 +243,20 @@ export function applyTrayMagnetPockets(
 ): TerrainMeshPayload {
   const positions = [...mesh.positions];
   const indices = stripBottomCapTriangles(mesh);
+  const cache = new VertexCache(positions);
 
-  buildBottomPlateGrid(
+  buildBottomPlateShape(
     outer,
     mesh.bottomZ,
     holes,
     holeRadius,
-    positions,
+    cache,
     indices,
   );
 
   for (const h of holes) {
     appendMagnetPocket(
-      positions,
+      cache,
       indices,
       h.x,
       h.y,

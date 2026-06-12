@@ -155,6 +155,7 @@ export async function generateModelsZip(
     const trayStl = join(workDir, STL_FILE_NAMES.trayBase);
 
     assertWatertightMesh(terrainWithGroove.mesh, "Terrain_Main");
+    assertWatertightMesh(trayRes.mesh, "Tray_Base");
     if (terrainWithGroove.trailMesh) {
       assertTrailLineMesh(terrainWithGroove.trailMesh, "Trail_Line");
     }

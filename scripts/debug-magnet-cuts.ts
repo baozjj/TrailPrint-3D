@@ -1,6 +1,6 @@
 import { createDefaultConfig } from "../shared/types/config";
 import { computeTrayFootprint } from "../shared/utils/tray-footprint";
-import { buildTrayBaseMeshCsg } from "../electron/main/tray/tray-csg-mesh";
+import { buildTrayBaseMeshForExport } from "../electron/main/tray/tray-export-mesh";
 import { computeTrayBottomMagnetHoles } from "../shared/utils/magnet-hole-layout";
 import { magnetCutDimensionsMm } from "../shared/utils/magnet-hole-geometry";
 import {
@@ -27,7 +27,7 @@ const { radiusMm: radius, depthMm: depth } = magnetCutDimensionsMm(
   cfg.assembly.magnet,
 );
 
-const mesh = buildTrayBaseMeshCsg(footprint, cfg.tray, {
+const mesh = buildTrayBaseMeshForExport(footprint, cfg.tray, {
   holes,
   radiusMm: radius,
   depthMm: depth,
@@ -45,6 +45,7 @@ assert(
   bottomPlateCoversPoint(mesh, 0, footprint.outer[0]!.y * 0.35),
 );
 assert("no non-manifold edges", analysis.nonManifoldEdges === 0);
+assert("watertight mesh", analysis.boundaryEdges === 0);
 assert("has triangles", mesh.indices.length > 48);
 
 console.log(
