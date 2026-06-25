@@ -25,6 +25,9 @@ export interface MapCropConfig {
   mapZoom: number;
   /** 地图旋转角（度，0=北朝上），供裁剪与 STL 朝向 */
   mapBearingDeg: number;
+  /** Leaflet mapPane 像素偏移；中心与 mapCenter 同步时通常为 0 */
+  mapPaneX?: number;
+  mapPaneY?: number;
 }
 
 // ─── 模块二：主模型生成 ─────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
+import { containerPointToLatLng } from "./leaflet-projection";
 import { buildMaskGeometry } from "./mask-geometry";
-import { unprojectPoint } from "./map-projection";
 
 export interface MaskMmScale {
   scaleX: number;
@@ -71,14 +71,7 @@ export function modelMmToLatLon(
   const h = Math.max(viewportHeight, 64);
   const scale = maskMmScale(mapCrop, crop, w, h);
   const scr = modelMmToScreen(xMm, yMm, scale);
-  return unprojectPoint(
-    scr.x,
-    scr.y,
-    { lat: mapCrop.mapCenterLat, lon: mapCrop.mapCenterLon },
-    mapCrop.mapZoom,
-    w,
-    h,
-  );
+  return containerPointToLatLng(scr.x, scr.y, mapCrop, w, h);
 }
 
 export function heightfieldCellMm(
@@ -123,4 +116,61 @@ export function heightfieldSampleGeo(
     }
   }
   return { lats, lons };
+}
+
+export interface GeoBounds {
+  minLat: number;
+  maxLat: number;
+  minLon: number;
+  maxLon: number;
+}
+
+/** 高度场全部采样点的地理外接框（与 DEM / 卫星贴图 UV 对齐） */
+export function heightfieldGeoBounds(
+  crop: TerrainCropRegion,
+  cols: number,
+  rows: number,
+  mapCrop: MapCropConfig,
+  viewportWidth: number,
+  viewportHeight: number,
+  padDeg = 0.00015,
+): GeoBounds {
+  const { lats, lons } = heightfieldSampleGeo(
+    crop,
+    cols,
+    rows,
+    mapCrop,
+    viewportWidth,
+    viewportHeight,
+  );
+  let minLat = crop.minLat;
+  let maxLat = crop.maxLat;
+  let minLon = crop.minLon;
+  let maxLon = crop.maxLon;
+  for (let i = 0; i < lats.length; i++) {
+    minLat = Math.min(minLat, lats[i]!);
+    maxLat = Math.max(maxLat, lats[i]!);
+    minLon = Math.min(minLon, lons[i]!);
+    maxLon = Math.max(maxLon, lons[i]!);
+  }
+  return {
+    minLat: minLat - padDeg,
+    maxLat: maxLat + padDeg,
+    minLon: minLon - padDeg,
+    maxLon: maxLon + padDeg,
+  };
+}
+
+/** 经纬度 → 北向上卫星贴图 UV（v=0 为北缘） */
+export function geoToNormalizedUv(
+  lat: number,
+  lon: number,
+  bounds: GeoBounds,
+): { u: number; v: number } {
+  const lonSpan = Math.max(bounds.maxLon - bounds.minLon, 1e-12);
+  const latSpan = Math.max(bounds.maxLat - bounds.minLat, 1e-12);
+  return {
+    u: (lon - bounds.minLon) / lonSpan,
+    v: (bounds.maxLat - lat) / latSpan,
+  };
 }

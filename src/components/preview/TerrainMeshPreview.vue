@@ -3,7 +3,6 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { TerrainGenerateResponse } from "@shared/types/terrain";
-import { buildHeightfieldTerrainMesh } from "@shared/utils/heightfield-mesh";
 import { computeTerrainAssemblyOffsetZMm } from "@shared/utils/assembly-layout";
 import {
   buildTerrainGeometryFromPreview,
@@ -12,11 +11,9 @@ import {
   fitCameraToTerrain,
   payloadToBufferGeometry,
 } from "@/utils/terrain-mesh-three";
-import { fetchSatelliteTextureForCrop } from "@/utils/satellite-imagery";
 import { useConfigStore } from "@/stores/config";
 import type { TrayMeshPayload } from "@shared/types/tray";
 import {
-  terrainMeshQualitySpec,
   trailPreviewTubeSegments,
 } from "@shared/utils/terrain-mesh-quality";
 import { storeToRefs } from "pinia";
@@ -71,7 +68,7 @@ const demLabel = computed(() => {
   const grid = r.heightPreview
     ? `${r.heightPreview.cols}×${r.heightPreview.rows}`
     : "";
-  return `Esri 卫星影像 · DEM ${grid} · ${r.generationMs}ms`;
+  return `3D 地形预览 · DEM ${grid} · ${r.generationMs}ms`;
 });
 
 function disposeSatelliteTexture(): void {
@@ -82,9 +79,9 @@ function disposeSatelliteTexture(): void {
 function ensureTerrainMaterial(): THREE.MeshStandardMaterial {
   if (!terrainMaterial) {
     terrainMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.92,
-      metalness: 0.02,
+      color: 0xf3ead6,
+      roughness: 0.88,
+      metalness: 0.01,
       side: THREE.DoubleSide,
       polygonOffset: true,
       polygonOffsetFactor: 1,
@@ -160,48 +157,8 @@ async function rebuildScene(): Promise<void> {
   terrainMesh.renderOrder = 0;
   terrainRoot.add(terrainMesh);
 
-  imageryLoading.value = true;
-  try {
-    const texPx = terrainMeshQualitySpec(
-      config.value.terrain.meshQuality,
-      config.value.terrain.meshQualityCustom,
-    ).texturePx;
-    const canvas = await fetchSatelliteTextureForCrop(r.crop, texPx);
-    if (token !== rebuildToken) return;
-    disposeSatelliteTexture();
-    satelliteTexture = new THREE.CanvasTexture(canvas);
-    satelliteTexture.colorSpace = THREE.SRGBColorSpace;
-    satelliteTexture.anisotropy = renderer
-      ? Math.min(8, renderer.capabilities.getMaxAnisotropy())
-      : 4;
-    satelliteTexture.minFilter = THREE.LinearMipmapLinearFilter;
-    satelliteTexture.magFilter = THREE.LinearFilter;
-    satelliteTexture.needsUpdate = true;
-    mat.map = satelliteTexture;
-    mat.needsUpdate = true;
-  } catch {
-    if (token !== rebuildToken) return;
-    terrainGeo.dispose();
-    const meshPayload = buildHeightfieldTerrainMesh(
-      r.crop,
-      preview.heights,
-      preview.cols,
-      preview.rows,
-      preview.baseThicknessMm,
-    );
-    terrainMesh.geometry = payloadToBufferGeometry(meshPayload, {
-      terrain: true,
-    });
-    mat.map = null;
-    mat.vertexColors = true;
-    mat.needsUpdate = true;
-    statusHint.value = "卫星影像加载失败，已使用地形着色";
-  } finally {
-    if (token === rebuildToken) {
-      imageryLoading.value = false;
-      syncSceneLoading();
-    }
-  }
+  imageryLoading.value = false;
+  syncSceneLoading();
 
   if (token !== rebuildToken) return;
 
@@ -436,7 +393,7 @@ defineExpose({ imageryLoading, sceneBuilding });
       {{ statusHint }}
     </div>
     <div v-else-if="!overlayLoading && !result" class="terrain-preview__badge">
-      导入 GPX 后打开 3D 预览，将显示卫星影像贴图与真实地形
+      导入 GPX 后打开 3D 预览，将显示真实地形模型
     </div>
     <div
       v-else-if="

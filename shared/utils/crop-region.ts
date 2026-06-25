@@ -2,7 +2,7 @@ import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
 import { regularPolygonFootprintMm } from "./footprint";
 import { buildMaskGeometry, type MaskScreenGeometry } from "./mask-geometry";
-import { unprojectPoint } from "./map-projection";
+import { containerPointToLatLng } from "./leaflet-projection";
 
 export function physicalFootprintMm(mapCrop: MapCropConfig): {
   widthMm: number;
@@ -81,18 +81,10 @@ export function computeTerrainCropRegion(
   const w = Math.max(viewportWidth, 64);
   const h = Math.max(viewportHeight, 64);
   const mask = buildMaskGeometry(mapCrop, w, h);
-  const center = { lat: mapCrop.mapCenterLat, lon: mapCrop.mapCenterLon };
   const boundary = maskBoundaryPoints(mask);
-  const geoPts = boundary.map((p) => {
-    const unrot = rotateScreenPoint(
-      p.x,
-      p.y,
-      w / 2,
-      h / 2,
-      mapCrop.mapBearingDeg,
-    );
-    return unprojectPoint(unrot.x, unrot.y, center, mapCrop.mapZoom, w, h);
-  });
+  const geoPts = boundary.map((p) =>
+    containerPointToLatLng(p.x, p.y, mapCrop, w, h),
+  );
 
   let minLat = Infinity;
   let maxLat = -Infinity;

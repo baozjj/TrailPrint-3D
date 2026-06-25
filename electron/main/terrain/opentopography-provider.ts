@@ -30,17 +30,41 @@ export interface OtBbox {
   east: number;
 }
 
-function padBbox(crop: TerrainCropRegion): OtBbox {
-  const latSpan = Math.max(crop.maxLat - crop.minLat, 0.0005);
-  const lonSpan = Math.max(crop.maxLon - crop.minLon, 0.0005);
+function padBbox(
+  south: number,
+  north: number,
+  west: number,
+  east: number,
+): OtBbox {
+  const latSpan = Math.max(north - south, 0.0005);
+  const lonSpan = Math.max(east - west, 0.0005);
   const padLat = Math.max(latSpan * 0.08, 0.0008);
   const padLon = Math.max(lonSpan * 0.08, 0.0008);
   return {
-    south: crop.minLat - padLat,
-    north: crop.maxLat + padLat,
-    west: crop.minLon - padLon,
-    east: crop.maxLon + padLon,
+    south: south - padLat,
+    north: north + padLat,
+    west: west - padLon,
+    east: east + padLon,
   };
+}
+
+/** 下载 bbox 须覆盖全部 DEM 采样点（含多边形外接框角点、地图旋转后的网格角点） */
+function bboxForDemSamples(
+  crop: TerrainCropRegion,
+  lats: number[],
+  lons: number[],
+): OtBbox {
+  let south = crop.minLat;
+  let north = crop.maxLat;
+  let west = crop.minLon;
+  let east = crop.maxLon;
+  for (let i = 0; i < lats.length; i++) {
+    south = Math.min(south, lats[i]!);
+    north = Math.max(north, lats[i]!);
+    west = Math.min(west, lons[i]!);
+    east = Math.max(east, lons[i]!);
+  }
+  return padBbox(south, north, west, east);
 }
 
 function cacheDir(): string {
@@ -178,7 +202,7 @@ export async function sampleElevationsOpenTopography(
 ): Promise<Float64Array> {
   const key = resolveOpenTopoApiKey(apiKey);
 
-  const bbox = padBbox(crop);
+  const bbox = bboxForDemSamples(crop, lats, lons);
   const sampler = await loadSampler(
     demtype,
     bbox,
@@ -189,13 +213,19 @@ export async function sampleElevationsOpenTopography(
 
   for (let i = 0; i < lats.length; i++) {
     const v = sampler.sample(lats[i]!, lons[i]!);
-    if (v === null || !Number.isFinite(v)) {
-      throw new IpcException(
-        "DEM_FETCH_FAILED",
-        "高程栅格在部分采样点无有效值，请调整地图区域或更换 DEM 数据源",
-      );
-    }
-    out[i] = v;
+    // 栅格 nodata / 遮罩外角点：留 NaN，由 fillDemHoles 邻域填补
+    out[i] = v === null || !Number.isFinite(v) ? NaN : v;
+  }
+
+  let validCount = 0;
+  for (let i = 0; i < out.length; i++) {
+    if (Number.isFinite(out[i]!)) validCount++;
+  }
+  if (validCount === 0) {
+    throw new IpcException(
+      "DEM_FETCH_FAILED",
+      "高程栅格在采样区域无有效值，请调整地图区域或更换 DEM 数据源",
+    );
   }
 
   return out;

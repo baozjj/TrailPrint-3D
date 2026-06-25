@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import type { MapCropConfig } from "@shared/types/config";
 import type {
   TerrainCropRegion,
   TerrainHeightPreview,
@@ -11,6 +12,11 @@ import {
   sampleHeightBilinearMm,
 } from "@shared/utils/heightfield-mesh";
 import { projectToFootprintMm } from "@shared/utils/footprint";
+import {
+  geoToNormalizedUv,
+  modelMmToLatLon,
+  type GeoBounds,
+} from "@shared/utils/map-mm-projection";
 
 /** 在高度场（行优先 mm）上双线性采样表面 Z */
 function sampleHeightPreviewZ(
@@ -84,6 +90,35 @@ function applyTerrainUvs(
     const y = pos.getY(i);
     uvs[i * 2] = THREE.MathUtils.clamp((x + hw) / crop.widthMm, 0, 1);
     uvs[i * 2 + 1] = THREE.MathUtils.clamp((y + hh) / crop.heightMm, 0, 1);
+  }
+  geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+}
+
+/** 按顶点经纬度映射卫星贴图 UV，与地图旋转后的 DEM 采样一致 */
+export function applyTerrainGeoUvs(
+  geometry: THREE.BufferGeometry,
+  crop: TerrainCropRegion,
+  mapCrop: MapCropConfig,
+  viewportWidth: number,
+  viewportHeight: number,
+  textureBounds: GeoBounds,
+): void {
+  const pos = geometry.getAttribute("position") as THREE.BufferAttribute;
+  const uvs = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const geo = modelMmToLatLon(
+      x,
+      y,
+      mapCrop,
+      crop,
+      viewportWidth,
+      viewportHeight,
+    );
+    const { u, v } = geoToNormalizedUv(geo.lat, geo.lon, textureBounds);
+    uvs[i * 2] = THREE.MathUtils.clamp(u, 0, 1);
+    uvs[i * 2 + 1] = THREE.MathUtils.clamp(v, 0, 1);
   }
   geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
 }

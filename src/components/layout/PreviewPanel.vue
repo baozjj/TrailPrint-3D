@@ -28,7 +28,8 @@ function syncViewportToStore(): void {
   ui.previewViewport = { ...viewport.value };
 }
 
-const terrainGen = useTerrainGeneration(modalViewport, {
+/** 地形/轨迹投影须与地图遮罩视口一致，不能用 3D 弹窗尺寸 */
+const terrainGen = useTerrainGeneration(viewport, {
   enabled: terrainPreviewOpen,
 });
 const trayGen = useTrayGeneration();

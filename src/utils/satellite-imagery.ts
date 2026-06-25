@@ -1,10 +1,29 @@
+import type { MapCropConfig } from "@shared/types/config";
 import type { TerrainCropRegion } from "@shared/types/terrain";
+import type { GeoBounds } from "@shared/utils/map-mm-projection";
+import { heightfieldGeoBounds } from "@shared/utils/map-mm-projection";
 
 const ESRI_TILE =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 const TILE_SIZE = 256;
 /** 单张卫星贴图最长边上限，避免超出常见 GPU 纹理限制 */
 const MAX_TEXTURE_PX = 8192;
+
+export type SatelliteTextureGeoBounds = GeoBounds;
+
+export interface SatelliteTextureFetchOptions {
+  mapCrop: MapCropConfig;
+  viewportWidth: number;
+  viewportHeight: number;
+  gridCols: number;
+  gridRows: number;
+}
+
+export interface SatelliteTextureResult {
+  canvas: HTMLCanvasElement;
+  /** 拼接画布实际覆盖的地理范围（与 UV 计算一致） */
+  bounds: SatelliteTextureGeoBounds;
+}
 
 function lonLatToTileXY(
   lon: number,
@@ -18,6 +37,32 @@ function lonLatToTileXY(
     ((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2) * n,
   );
   return { x, y };
+}
+
+function tileXToLon(x: number, zoom: number): number {
+  const n = 2 ** zoom;
+  return (x / n) * 360 - 180;
+}
+
+function tileYToLat(y: number, zoom: number): number {
+  const n = 2 ** zoom;
+  const latRad = Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n)));
+  return (latRad * 180) / Math.PI;
+}
+
+function tileRangeGeoBounds(
+  tlX: number,
+  tlY: number,
+  brX: number,
+  brY: number,
+  zoom: number,
+): SatelliteTextureGeoBounds {
+  return {
+    minLon: tileXToLon(tlX, zoom),
+    maxLon: tileXToLon(brX + 1, zoom),
+    maxLat: tileYToLat(tlY, zoom),
+    minLat: tileYToLat(brY + 1, zoom),
+  };
 }
 
 function pickZoom(
@@ -47,23 +92,63 @@ function loadTile(url: string): Promise<HTMLImageElement> {
   });
 }
 
+/** 与 fetchSatelliteTextureForCrop 使用同一套瓦片范围，供 UV 预计算 */
+export function planSatelliteTextureForCrop(
+  crop: TerrainCropRegion,
+  targetPx: number,
+  options: SatelliteTextureFetchOptions,
+): {
+  bounds: SatelliteTextureGeoBounds;
+  zoom: number;
+  cappedPx: number;
+} {
+  const cappedPx = Math.min(Math.max(256, targetPx), MAX_TEXTURE_PX);
+  const sampleBounds = heightfieldGeoBounds(
+    crop,
+    options.gridCols,
+    options.gridRows,
+    options.mapCrop,
+    options.viewportWidth,
+    options.viewportHeight,
+  );
+  const z = pickZoom(
+    sampleBounds.minLon,
+    sampleBounds.maxLon,
+    sampleBounds.minLat,
+    sampleBounds.maxLat,
+    cappedPx,
+  );
+  const tl = lonLatToTileXY(sampleBounds.minLon, sampleBounds.maxLat, z);
+  const br = lonLatToTileXY(sampleBounds.maxLon, sampleBounds.minLat, z);
+  return {
+    bounds: tileRangeGeoBounds(tl.x, tl.y, br.x, br.y, z),
+    zoom: z,
+    cappedPx,
+  };
+}
+
 /**
  * 按裁剪区地理范围拼接 Esri 世界影像（与 2D 地图同源），供 3D 贴图。
+ * UV 须用返回的 bounds + 顶点经纬度（见 applyTerrainGeoUvs）。
  */
 export async function fetchSatelliteTextureForCrop(
   crop: TerrainCropRegion,
   targetPx = 2048,
-): Promise<HTMLCanvasElement> {
-  const cappedPx = Math.min(Math.max(256, targetPx), MAX_TEXTURE_PX);
-  const pad = 0.00015;
-  const minLon = crop.minLon - pad;
-  const maxLon = crop.maxLon + pad;
-  const minLat = crop.minLat - pad;
-  const maxLat = crop.maxLat + pad;
-
-  const z = pickZoom(minLon, maxLon, minLat, maxLat, cappedPx);
-  const tl = lonLatToTileXY(minLon, maxLat, z);
-  const br = lonLatToTileXY(maxLon, minLat, z);
+  options: SatelliteTextureFetchOptions,
+): Promise<SatelliteTextureResult> {
+  const plan = planSatelliteTextureForCrop(crop, targetPx, options);
+  const z = plan.zoom;
+  const cappedPx = plan.cappedPx;
+  const sampleBounds = heightfieldGeoBounds(
+    crop,
+    options.gridCols,
+    options.gridRows,
+    options.mapCrop,
+    options.viewportWidth,
+    options.viewportHeight,
+  );
+  const tl = lonLatToTileXY(sampleBounds.minLon, sampleBounds.maxLat, z);
+  const br = lonLatToTileXY(sampleBounds.maxLon, sampleBounds.minLat, z);
   const tileCountX = br.x - tl.x + 1;
   const tileCountY = br.y - tl.y + 1;
 
@@ -93,18 +178,22 @@ export async function fetchSatelliteTextureForCrop(
 
   await Promise.all(jobs);
 
-  if (canvasW <= cappedPx && canvasH <= cappedPx) return canvas;
+  let outCanvas = canvas;
+  if (canvasW > cappedPx || canvasH > cappedPx) {
+    const scale = cappedPx / Math.max(canvasW, canvasH);
+    const outW = Math.max(64, Math.round(canvasW * scale));
+    const outH = Math.max(64, Math.round(canvasH * scale));
+    const out = document.createElement("canvas");
+    out.width = outW;
+    out.height = outH;
+    const octx = out.getContext("2d");
+    if (octx) {
+      octx.imageSmoothingEnabled = true;
+      octx.imageSmoothingQuality = "high";
+      octx.drawImage(canvas, 0, 0, outW, outH);
+      outCanvas = out;
+    }
+  }
 
-  const scale = cappedPx / Math.max(canvasW, canvasH);
-  const outW = Math.max(64, Math.round(canvasW * scale));
-  const outH = Math.max(64, Math.round(canvasH * scale));
-  const out = document.createElement("canvas");
-  out.width = outW;
-  out.height = outH;
-  const octx = out.getContext("2d");
-  if (!octx) return canvas;
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = "high";
-  octx.drawImage(canvas, 0, 0, outW, outH);
-  return out;
+  return { canvas: outCanvas, bounds: plan.bounds };
 }

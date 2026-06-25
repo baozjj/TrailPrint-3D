@@ -2,9 +2,8 @@ import type { GpxPoint } from "../types";
 import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
 import { clipPolylineToFootprint } from "./footprint";
-import { rotateScreenPoint } from "./crop-region";
+import { latLngToContainerPoint } from "./leaflet-projection";
 import { maskMmScale } from "./map-mm-projection";
-import { projectPoint } from "./map-projection";
 
 export interface TrailPointMm {
   x: number;
@@ -30,20 +29,9 @@ export function projectTrailToModelMm(
   const w = Math.max(viewportWidth, 64);
   const h = Math.max(viewportHeight, 64);
   const scale = maskMmScale(mapCrop, crop, w, h);
-  const center = { lat: mapCrop.mapCenterLat, lon: mapCrop.mapCenterLon };
-  const zoom = mapCrop.mapZoom;
-
-  const cx = w / 2;
-  const cy = h / 2;
-  const bearing = mapCrop.mapBearingDeg ?? 0;
-
   const mapped: TrailPointMm[] = [];
   for (const p of points) {
-    const northUp = projectPoint(p, center, zoom, w, h);
-    const scr =
-      Math.abs(bearing) > 0.01
-        ? rotateScreenPoint(northUp.x, northUp.y, cx, cy, -bearing)
-        : northUp;
+    const scr = latLngToContainerPoint(p.lat, p.lon, mapCrop, w, h);
     mapped.push({
       x: (scr.x - scale.cx) * scale.scaleX,
       y: (scale.cy - scr.y) * scale.scaleY,
