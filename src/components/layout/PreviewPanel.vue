@@ -38,6 +38,7 @@ const { regenerate: regenerateTerrain } = terrainGen;
 const { regenerate: regenerateTray } = trayGen;
 const terrainResult = toRef(terrainGen, "lastResult");
 const terrainGenerating = toRef(terrainGen, "generating");
+const terrainProgress = toRef(terrainGen, "progress");
 const terrainError = toRef(terrainGen, "error");
 const trayMesh = toRef(trayGen, "mesh");
 
@@ -199,6 +200,7 @@ async function onDownloadStl(): Promise<void> {
       :result="terrainResult"
       :tray-mesh="trayMesh"
       :generating="terrainGenerating"
+      :terrain-progress="terrainProgress"
       :downloading="exporting"
       :error="terrainError"
       @opened="onTerrainModalOpened"

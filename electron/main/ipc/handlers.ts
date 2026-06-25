@@ -89,14 +89,27 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IpcChannels.TERRAIN_GENERATE,
-    wrapHandler(
-      async (req: TerrainGenerateRequest): Promise<TerrainGenerateResponse> => {
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      req: TerrainGenerateRequest,
+    ): Promise<TerrainGenerateResponse> => {
+      try {
         if (!req?.config) {
           throw new IpcException('INVALID_REQUEST', '缺少 config 快照')
         }
-        return generateTerrainMain(req)
+        return await generateTerrainMain(req, (progress) => {
+          event.sender.send(IpcChannels.TERRAIN_PROGRESS, progress)
+        })
+      } catch (err) {
+        if (err instanceof IpcException) {
+          throw new Error(err.message)
+        }
+        if (err instanceof Error) {
+          throw err
+        }
+        throw new Error(String(err))
       }
-    )
+    },
   )
 
   ipcMain.handle(

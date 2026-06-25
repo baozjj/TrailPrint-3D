@@ -1,8 +1,45 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import TerrainMeshPreview from "@/components/preview/TerrainMeshPreview.vue";
-import type { TerrainGenerateResponse } from "@shared/types/terrain";
+import type {
+  TerrainGenerateProgress,
+  TerrainGenerateResponse,
+  TerrainSceneProgress,
+} from "@shared/types/terrain";
 import type { TrayMeshPayload } from "@shared/types/tray";
+
+const PREVIEW_STEPS = [
+  { key: "prepare", label: "准备参数" },
+  { key: "crop", label: "计算裁剪范围" },
+  { key: "dem", label: "获取高程数据" },
+  { key: "process", label: "处理地形" },
+  { key: "trail", label: "计算轨迹" },
+  { key: "scene", label: "构建 3D 场景" },
+] as const;
+
+type PreviewStepKey = (typeof PREVIEW_STEPS)[number]["key"];
+
+function terrainPhaseToStep(
+  phase: TerrainGenerateProgress["phase"] | undefined,
+): PreviewStepKey {
+  switch (phase) {
+    case "prepare":
+      return "prepare";
+    case "crop":
+      return "crop";
+    case "dem":
+      return "dem";
+    case "process":
+      return "process";
+    case "trail":
+    case "mesh":
+      return "trail";
+    case "done":
+      return "scene";
+    default:
+      return "prepare";
+  }
+}
 
 const open = defineModel<boolean>({ required: true });
 const viewport = defineModel<{ w: number; h: number }>("viewport", {
@@ -13,6 +50,7 @@ const props = defineProps<{
   result: TerrainGenerateResponse | null;
   trayMesh: TrayMeshPayload | null;
   generating: boolean;
+  terrainProgress: TerrainGenerateProgress | null;
   downloading: boolean;
   error: string | null;
 }>();
@@ -33,23 +71,61 @@ const canDownload = computed(
 
 const bodyRef = ref<HTMLDivElement | null>(null);
 const sceneLoading = ref(false);
+const sceneProgress = ref<TerrainSceneProgress | null>(null);
 
 const showLoadingOverlay = computed(
   () => props.generating || sceneLoading.value,
 );
 
+const activeStepKey = computed<PreviewStepKey>(() => {
+  if (sceneLoading.value) return "scene";
+  if (props.generating) return terrainPhaseToStep(props.terrainProgress?.phase);
+  return "prepare";
+});
+
+const activeStepIndex = computed(() =>
+  PREVIEW_STEPS.findIndex((step) => step.key === activeStepKey.value),
+);
+
+function stepStatus(index: number): "done" | "active" | "pending" {
+  if (index < activeStepIndex.value) return "done";
+  if (index === activeStepIndex.value) return "active";
+  return "pending";
+}
+
+const loadingPercent = computed(() => {
+  if (sceneLoading.value) {
+    const p = sceneProgress.value?.progress ?? 0.2;
+    return Math.min(100, Math.round(88 + p * 12));
+  }
+  if (props.generating) {
+    const p = props.terrainProgress?.progress ?? 0.05;
+    return Math.min(88, Math.max(4, Math.round(p * 88)));
+  }
+  return 0;
+});
+
 const loadingTitle = computed(() =>
   props.generating ? "正在生成 3D 模型" : "正在加载 3D 预览",
 );
 
-const loadingHint = computed(() =>
-  props.generating
-    ? "正在获取 DEM 高程、拼接卫星影像并构建 3D 网格，请稍候…"
-    : "正在构建山体网格并加载卫星影像贴图，完成后即可交互…",
-);
+const loadingHint = computed(() => {
+  if (sceneLoading.value) {
+    return sceneProgress.value?.message ?? "正在构建 3D 场景…";
+  }
+  if (props.generating) {
+    return props.terrainProgress?.message ?? "正在连接主进程…";
+  }
+  return "请稍候…";
+});
 
 function onSceneLoadingChange(loading: boolean): void {
   sceneLoading.value = loading;
+  if (!loading) sceneProgress.value = null;
+}
+
+function onSceneProgress(progress: TerrainSceneProgress): void {
+  sceneProgress.value = progress;
 }
 
 let resizeObserver: ResizeObserver | null = null;
@@ -67,6 +143,7 @@ function syncViewport(): void {
 watch(open, async (isOpen) => {
   if (!isOpen) {
     sceneLoading.value = false;
+    sceneProgress.value = null;
     return;
   }
   await Promise.resolve();
@@ -176,6 +253,24 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               <div class="terrain-modal__spinner" aria-hidden="true" />
               <p class="terrain-modal__loading-title">{{ loadingTitle }}</p>
               <p class="terrain-modal__loading-hint">{{ loadingHint }}</p>
+              <div class="terrain-modal__progress" aria-hidden="true">
+                <div
+                  class="terrain-modal__progress-bar"
+                  :style="{ width: `${loadingPercent}%` }"
+                />
+              </div>
+              <p class="terrain-modal__progress-text">{{ loadingPercent }}%</p>
+              <ol class="terrain-modal__steps">
+                <li
+                  v-for="(step, index) in PREVIEW_STEPS"
+                  :key="step.key"
+                  class="terrain-modal__step"
+                  :class="`terrain-modal__step--${stepStatus(index)}`"
+                >
+                  <span class="terrain-modal__step-index">{{ index + 1 }}</span>
+                  <span class="terrain-modal__step-label">{{ step.label }}</span>
+                </li>
+              </ol>
             </div>
 
             <div v-else-if="error" class="terrain-modal__error">
@@ -217,6 +312,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               :error="error"
               overlay-loading
               @scene-loading-change="onSceneLoadingChange"
+              @scene-progress="onSceneProgress"
             />
           </div>
         </div>
@@ -364,7 +460,74 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   font-size: 13px;
   color: rgba(255, 255, 255, 0.55);
   text-align: center;
-  max-width: 280px;
+  max-width: 320px;
+}
+
+.terrain-modal__progress {
+  width: min(360px, 80vw);
+  height: 6px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+
+.terrain-modal__progress-bar {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #6ea8ff, #8fd3ff);
+  transition: width 0.25s ease;
+}
+
+.terrain-modal__progress-text {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.terrain-modal__steps {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  width: min(360px, 80vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.terrain-modal__step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.terrain-modal__step--active {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.terrain-modal__step--done {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.terrain-modal__step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.terrain-modal__step--active .terrain-modal__step-index {
+  background: rgba(110, 168, 255, 0.35);
+}
+
+.terrain-modal__step--done .terrain-modal__step-index {
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .terrain-modal__preview {

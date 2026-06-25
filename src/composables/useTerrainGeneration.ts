@@ -1,8 +1,13 @@
-import { ref, watch, type Ref } from "vue";
+import { onScopeDispose, ref, watch, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useConfigStore } from "@/stores/config";
-import { ipcGenerateTerrain, formatIpcError } from "@/ipc/client";
+import {
+  ipcGenerateTerrain,
+  ipcOnTerrainProgress,
+  formatIpcError,
+} from "@/ipc/client";
 import type {
+  TerrainGenerateProgress,
   TerrainGenerateResponse,
   TerrainMeshPayload,
 } from "@shared/types/terrain";
@@ -18,6 +23,7 @@ export function useTerrainGeneration(
   const { config } = storeToRefs(configStore);
 
   const generating = ref(false);
+  const progress = ref<TerrainGenerateProgress | null>(null);
   const error = ref<string | null>(null);
   const lastResult = ref<TerrainGenerateResponse | null>(null);
   const mesh = ref<TerrainMeshPayload | null>(null);
@@ -25,6 +31,11 @@ export function useTerrainGeneration(
 
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let requestId = 0;
+
+  const unsubscribeProgress = ipcOnTerrainProgress((p) => {
+    if (generating.value) progress.value = p;
+  });
+  onScopeDispose(() => unsubscribeProgress());
 
   async function runGeneration(): Promise<void> {
     const { w, h } = viewport.value;
@@ -35,12 +46,18 @@ export function useTerrainGeneration(
       trailMesh.value = null;
       lastResult.value = null;
       error.value = null;
+      progress.value = null;
       return;
     }
 
     const id = ++requestId;
     generating.value = true;
     error.value = null;
+    progress.value = {
+      phase: "prepare",
+      progress: 0,
+      message: "正在准备生成 3D 模型…",
+    };
 
     try {
       const res = await ipcGenerateTerrain({
@@ -52,11 +69,17 @@ export function useTerrainGeneration(
       lastResult.value = res;
       mesh.value = res.mesh;
       trailMesh.value = res.trailMesh;
+      progress.value = {
+        phase: "done",
+        progress: 1,
+        message: "地形数据已就绪",
+      };
     } catch (err) {
       if (id !== requestId) return;
       error.value = formatIpcError(err);
       mesh.value = null;
       trailMesh.value = null;
+      progress.value = null;
     } finally {
       if (id === requestId) generating.value = false;
     }
@@ -113,6 +136,7 @@ export function useTerrainGeneration(
 
   return {
     generating,
+    progress,
     error,
     mesh,
     trailMesh,

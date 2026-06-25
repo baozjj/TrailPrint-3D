@@ -1,6 +1,7 @@
 import type { AppConfig } from "@shared/types";
 import type {
   TerrainCropRegion,
+  TerrainGenerateProgress,
   TerrainGenerateRequest,
   TerrainGenerateResponse,
   TerrainMeshPayload,
@@ -91,11 +92,25 @@ const EMPTY_TERRAIN_MESH: TerrainMeshPayload = {
   gridRows: 0,
 };
 
+export type TerrainProgressCallback = (progress: TerrainGenerateProgress) => void;
+
+function reportProgress(
+  onProgress: TerrainProgressCallback | undefined,
+  phase: TerrainGenerateProgress["phase"],
+  progress: number,
+  message: string,
+): void {
+  onProgress?.({ phase, progress, message });
+}
+
 export async function generateTerrainMain(
   req: TerrainGenerateRequest,
+  onProgress?: TerrainProgressCallback,
 ): Promise<TerrainGenerateResponse> {
   const started = Date.now();
   let { config, viewportWidth, viewportHeight } = req;
+
+  reportProgress(onProgress, "prepare", 0.02, "正在准备参数…");
   config = await hydrateGpxConfig(config);
   config = ensureMapZoomFitsTrail(config, viewportWidth, viewportHeight);
 
@@ -106,6 +121,7 @@ export async function generateTerrainMain(
     );
   }
 
+  reportProgress(onProgress, "crop", 0.08, "正在计算地图裁剪范围…");
   const crop = computeTerrainCropRegion(
     config.mapCrop,
     viewportWidth,
@@ -124,6 +140,13 @@ export async function generateTerrainMain(
   );
   const qualitySpec = terrainMeshQualitySpec(meshQuality, meshQualityCustom);
   const buildExportMesh = Boolean(req.stlExport);
+
+  reportProgress(
+    onProgress,
+    "dem",
+    0.12,
+    `正在获取高程数据（${cols}×${rows}）…`,
+  );
   const dem = await sampleDemGrid(
     crop,
     cols,
@@ -137,7 +160,9 @@ export async function generateTerrainMain(
       fetchTimeoutMs: demFetchTimeoutMs(meshQuality, meshQualityCustom),
     },
   );
+  reportProgress(onProgress, "dem", 0.68, "高程数据已下载，正在解析…");
 
+  reportProgress(onProgress, "process", 0.72, "正在处理地形高度场…");
   fillDemHoles(dem.elevations, cols, rows);
   const smoothed = applyTerrainSmoothing(
     dem.elevations,
@@ -190,6 +215,12 @@ export async function generateTerrainMain(
   const minSurfaceZ = minHeightFieldMm(heightMm);
   const baseThicknessMm = config.terrain.baseSolidThicknessMm;
 
+  reportProgress(
+    onProgress,
+    "mesh",
+    0.9,
+    buildExportMesh ? "正在生成可打印网格…" : "正在生成预览数据…",
+  );
   let mesh: TerrainMeshPayload = buildExportMesh
     ? buildHeightfieldTerrainMesh(crop, heightMm, cols, rows, baseThicknessMm)
     : { ...EMPTY_TERRAIN_MESH, gridCols: cols, gridRows: rows };
@@ -206,6 +237,7 @@ export async function generateTerrainMain(
     buildExportMesh ? mesh.minSurfaceZ : minSurfaceZ,
   );
 
+  reportProgress(onProgress, "trail", 0.84, "正在计算轨迹位置…");
   const polylineMm = buildTrailLinePolyline(
     config,
     crop,
@@ -233,6 +265,7 @@ export async function generateTerrainMain(
     });
   }
 
+  reportProgress(onProgress, "done", 1, "地形数据已就绪");
   return {
     crop,
     mesh,

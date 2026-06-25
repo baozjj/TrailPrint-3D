@@ -10,6 +10,7 @@ import type {
   TaskStatusResponse,
   TerrainGenerateRequest,
   TerrainGenerateResponse,
+  TerrainGenerateProgress,
   TrayGenerateRequest,
   TrayGenerateResponse,
   ExportGenerateRequest,
@@ -70,6 +71,12 @@ export function ipcOnExportProgress(
   callback: (progress: ExportProgress) => void
 ): () => void {
   return getApi().onExportProgress(callback)
+}
+
+export function ipcOnTerrainProgress(
+  callback: (progress: TerrainGenerateProgress) => void,
+): () => void {
+  return getApi().onTerrainProgress(callback)
 }
 
 export function formatIpcError(err: unknown): string {

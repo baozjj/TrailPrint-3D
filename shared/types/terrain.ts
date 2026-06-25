@@ -89,8 +89,28 @@ export interface TerrainGenerateResponse {
   generationMs: number;
 }
 
+export type TerrainGeneratePhase =
+  | "prepare"
+  | "crop"
+  | "dem"
+  | "process"
+  | "trail"
+  | "mesh"
+  | "done";
+
 export interface TerrainGenerateProgress {
-  phase: "crop" | "dem" | "mesh" | "done";
+  phase: TerrainGeneratePhase;
+  /** 0–1 */
+  progress: number;
+  message: string;
+}
+
+/** 渲染进程 3D 场景构建进度 */
+export type TerrainScenePhase = "terrain" | "tray" | "trail" | "camera" | "done";
+
+export interface TerrainSceneProgress {
+  phase: TerrainScenePhase;
+  /** 0–1 */
   progress: number;
   message: string;
 }

@@ -11,6 +11,7 @@ import type {
   TaskStatusResponse,
   TerrainGenerateRequest,
   TerrainGenerateResponse,
+  TerrainGenerateProgress,
   TrayGenerateRequest,
   TrayGenerateResponse,
   ExportGenerateRequest,
@@ -83,7 +84,19 @@ const api = {
     return () => {
       ipcRenderer.removeListener(IpcChannels.EXPORT_PROGRESS, handler)
     }
-  }
+  },
+  onTerrainProgress: (callback: (progress: TerrainGenerateProgress) => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: TerrainGenerateProgress,
+    ) => {
+      callback(progress)
+    }
+    ipcRenderer.on(IpcChannels.TERRAIN_PROGRESS, handler)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.TERRAIN_PROGRESS, handler)
+    }
+  },
 }
 
 export type TrailPrintApi = typeof api

@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { TerrainGenerateResponse } from "@shared/types/terrain";
+import type { TerrainGenerateResponse, TerrainSceneProgress } from "@shared/types/terrain";
 import { computeTerrainAssemblyOffsetZMm } from "@shared/utils/assembly-layout";
 import {
   buildTerrainGeometryFromPreview,
@@ -31,6 +31,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "scene-loading-change": [loading: boolean];
+  "scene-progress": [progress: TerrainSceneProgress];
 }>();
 
 const containerRef = ref<HTMLDivElement | null>(null);
@@ -103,11 +104,20 @@ function ensureTrayMaterial(): THREE.MeshLambertMaterial {
   return trayMaterial;
 }
 
+function reportScene(
+  phase: TerrainSceneProgress["phase"],
+  progress: number,
+  message: string,
+): void {
+  emit("scene-progress", { phase, progress, message });
+}
+
 async function rebuildScene(): Promise<void> {
   if (!trayRoot || !terrainRoot || !overlayRoot || !camera || !controls) return;
 
   const token = ++rebuildToken;
   sceneBuilding.value = true;
+  reportScene("terrain", 0.05, "正在初始化 3D 场景…");
   syncSceneLoading();
 
   disposeMeshGeometries(trayRoot);
@@ -137,6 +147,9 @@ async function rebuildScene(): Promise<void> {
     return;
   }
 
+  reportScene("terrain", 0.2, "正在构建山体网格…");
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
   const terrainGeo = buildTerrainGeometryFromPreview(r.crop, preview);
   terrainGeo.computeVertexNormals();
   if (!terrainGeo.getIndex()?.count) {
@@ -146,6 +159,8 @@ async function rebuildScene(): Promise<void> {
     syncSceneLoading();
     return;
   }
+
+  reportScene("terrain", 0.55, "正在应用山体材质…");
 
   const mat = ensureTerrainMaterial();
   mat.map = null;
@@ -168,6 +183,8 @@ async function rebuildScene(): Promise<void> {
 
   const tray = props.trayMesh;
   if (tray?.positions?.length && tray.indices?.length) {
+    reportScene("tray", 0.65, "正在加载托盘底座…");
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const trayGeo = payloadToBufferGeometry(tray, { hardEdges: true });
     const trayObj = new THREE.Mesh(trayGeo, ensureTrayMaterial());
     trayObj.frustumCulled = false;
@@ -179,6 +196,8 @@ async function rebuildScene(): Promise<void> {
   const trailWidth = r.trailDisplayWidthMm ?? 4;
 
   if (polyline.length >= 2) {
+    reportScene("trail", 0.78, "正在绘制轨迹…");
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     const tubeSegs = trailPreviewTubeSegments(polyline.length, {
       meshQuality: config.value.terrain.meshQuality,
       meshQualityCustom: config.value.terrain.meshQualityCustom,
@@ -214,9 +233,12 @@ async function rebuildScene(): Promise<void> {
 
   const fitTargets: THREE.Object3D[] = [terrainMesh, overlayRoot];
   if (trayRoot.children.length > 0) fitTargets.unshift(trayRoot);
+  reportScene("camera", 0.92, "正在调整视角…");
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
   fitCameraToTerrain(camera, controls, ...fitTargets);
 
   if (token === rebuildToken) {
+    reportScene("done", 1, "预览已就绪");
     sceneBuilding.value = false;
     syncSceneLoading();
   }
