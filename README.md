@@ -1,174 +1,187 @@
-# 🏔️ TrailPrint 3D
+# 🏔️ 印迹 TrailPrint 3D
 
-**English | [中文](README.zh.md)**
+**[English](README.en.md) | 中文**
 
-**Turn hiking GPX tracks into 3D-printable terrain models · GPX to STL**
+**将徒步轨迹（GPX）导出为可 3D 打印的地形模型 · GPX to 3D printable terrain**
 
-TrailPrint 3D is an open-source desktop app that combines GPX activity tracks with real-world elevation data (DEM) to generate multi-part STL models ready for multi-color FDM 3D printing. Import a `.gpx` file, frame the area on a map, tune print size and terrain settings, and export split parts — no manual 3D modeling required.
+### 🎁 定制 3D 模型实物
 
-### Use cases
+如果你没有 3D 打印机，或希望直接拿到基于 GPX 轨迹的地形模型成品，欢迎微信联系作者定制打印。
 
-- **Hiking & trail-running keepsakes:** Turn routes like West Lake Heart Trail, Wugong Mountain, MacLehose Trail, or Tiger Leaping Gorge into a displayable terrain model
-- **GPX to STL:** Import a track and get `Terrain_Main.stl` (terrain), `Trail_Line.stl` (trail), and `Tray_Base.stl` (tray base) automatically
-- **Multi-color 3D printing:** Split exports for Bambu Lab and other multi-color FDM printers — trail grooves plus a separate line part for color swaps, magnet holes for glue-free assembly
-- **Terrain relief display pieces:** Adjustable elevation exaggeration, surface smoothing, and a picture-frame base to make subtle real-world relief readable at desk scale
+- **微信号：** `gg_0328_bao`
+- **微信二维码：**
 
-> If this project helps you, consider giving it a **Star** ⭐ — it helps you follow updates and helps others discover the repo.
+![微信二维码](wechat-qr.JPG)
 
----
-
-## 🛠️ Workflow
-
-### 0. Get a GPX file
-
-Export your target track as a `.gpx` file from your GPS app or platform of choice (e.g. Garmin, Strava, AllTrails, or [2bulu](https://www.2bulu.com/) for Chinese hiking communities).
-
-<!-- Screenshot: export GPX from track app -->
-
-![Export GPX](docs/images/readme/00-gpx-export-2bulu.webp)
-
-### 1. Import the track
-
-Launch the app and upload the `.gpx` file from the previous step.
-
-<!-- Screenshot: upload GPX -->
-
-![Import GPX track](docs/images/readme/01-import-gpx.webp)
-
-### 2. Frame the scene and tune parameters
-
-Choose a base shape, drag and scale the track on the map, and adjust terrain height, surface smoothing, tray base, assembly tolerances, and magnet holes in the sidebar.
-
-<!-- Screenshot: map framing + sidebar -->
-
-![Frame and tune parameters](docs/images/readme/02-compose-framing.webp)
-
-### 3. Export the model
-
-When the preview looks good, generate and download the bundled 3D model archive.
-
-<!-- Screenshot: export and download -->
-
-![Export model](docs/images/readme/03-export-model.webp)
-
-### 4. Import into Bambu Studio and assign colors
-
-Unzip the download and drag `Terrain_Main.stl`, `Trail_Line.stl`, and `Tray_Base.stl` into [Bambu Studio](https://bambulab.com/en/download/studio). Assign filament colors to terrain, trail, and base, preview the multi-color assembly, then slice and print.
-
-<!-- Screenshot: import three STLs in Bambu Studio -->
-
-![Import models in Bambu Studio](docs/images/readme/04-bambu-studio-import.webp)
-
-<!-- Screenshot: colored preview in Bambu Studio -->
-
-![Colored preview in Bambu Studio](docs/images/readme/05-bambu-studio-colored.webp)
-
-### 5. Print and assemble
-
-After printing, assemble the terrain, trail, and base parts into the finished physical model.
-
-<!-- Photo: printed result -->
-
-![3D printed result](docs/images/readme/06-printed-result.webp)
-
-![3D printed result](docs/images/readme/07-printed-result-2.webp)
+<!-- 待补充：将 YOUR_WECHAT_ID 替换为实际微信号；将二维码图片保存为 docs/images/readme/wechat-qr.webp -->
 
 ---
 
-## 🚀 Quick start
+「印迹 TrailPrint 3D」是一款开源桌面工具，用于把 GPX 运动轨迹与真实地形高程（DEM）结合，生成可直接用于多色 3D 打印的 STL 模型。支持从 [两步路](https://www.2bulu.com/)导出的 `.gpx` 文件；上传轨迹后，可在地图上调整取景范围，设置打印尺寸与地形参数，并导出分件模型——无需手动 3D 建模。
 
-This project is an **Electron + Vue 3** desktop app managed with npm.
+### 适用场景
 
-### Requirements
+- **徒步 / 越野跑纪念品**：走完西湖爱心线、武功山、麦理浩径、虎跳峡等路线，把轨迹「印」成一座可摆放的地形模型
+- **GPX 转 STL**：导入轨迹文件，自动生成 `Terrain_Main.stl`（山体）、`Trail_Line.stl`（路线）、`Tray_Base.stl`（托盘底座）
+- **多色 3D 打印**：分件导出，适配拓竹（Bambu Lab）等多色 FDM 打印机；轨迹凹槽 + 独立线条换色，磁吸孔位免胶水拼装
+- **地形浮雕摆件**：可调山体高度、表面平滑、画框式底座，弥补缩放到桌面尺寸后地形起伏不明显的问题
 
-- [Node.js](https://nodejs.org/) 18 or later
-- npm (bundled with Node.js)
+> 如果这个项目对你有帮助，欢迎在页面右上角点个 **Star** ⭐ —— 方便你跟进后续更新，也能让更多人发现它。
 
-### Install and run
+---
+
+## 🛠️ 操作流程
+
+### 0. 获取 GPX 文件（两步路）
+
+在 [两步路](https://www.2bulu.com/) 中打开目标轨迹，导出为 `.gpx` 文件，供后续导入使用。
+
+<!-- 截图：两步路中打开轨迹并导出 GPX -->
+
+![两步路导出 GPX](docs/images/readme/00-gpx-export-2bulu.webp)
+
+### 1. 导入轨迹
+
+启动应用后，上传上一步导出的 `.gpx` 文件。
+
+<!-- 截图：上传 GPX 文件 -->
+
+![导入 GPX 轨迹](docs/images/readme/01-import-gpx.webp)
+
+### 2. 构图取景与调整参数
+
+选择底座形状，在地图上拖动、缩放轨迹位置；同时在侧栏设置山体高度、表面平滑、托盘底座，以及拼装公差与磁吸孔位等参数。
+
+<!-- 截图：地图取景 + 侧栏参数面板（一张图） -->
+
+![构图取景与调整参数](docs/images/readme/02-compose-framing.webp)
+
+### 3. 导出模型
+
+确认预览无误后，生成并下载打包好的 3D 模型压缩包。
+
+<!-- 截图：导出与下载 -->
+
+![导出模型](docs/images/readme/03-export-model.webp)
+
+### 4. 导入 Bambu Studio 并上色
+
+解压下载的压缩包，将 `Terrain_Main.stl`、`Trail_Line.stl`、`Tray_Base.stl` 三个文件拖入 [Bambu Studio](https://bambulab.com/zh/download/studio)，为山体、轨迹与底座分别指定耗材颜色，预览多色拼装效果后即可切片打印。
+
+<!-- 截图：Bambu Studio 中导入三个 STL -->
+
+![Bambu Studio 导入模型](docs/images/readme/04-bambu-studio-import.webp)
+
+<!-- 截图：Bambu Studio 中上色后的预览效果 -->
+
+![Bambu Studio 上色效果](docs/images/readme/05-bambu-studio-colored.webp)
+
+### 5. 打印成品
+
+切片发送打印后，将山体、轨迹与底座拼装完成，即可得到实体地形模型。
+
+<!-- 实拍：3D 打印成品效果 -->
+
+![3D 打印成品](docs/images/readme/06-printed-result.webp)
+
+![3D 打印成品](docs/images/readme/07-printed-result-2.webp)
+
+---
+
+## 🚀 快速开始
+
+本项目为 **Electron + Vue 3** 桌面应用，使用 npm 管理依赖。
+
+### 环境要求
+
+- [Node.js](https://nodejs.org/) 18 或更高版本
+- npm（随 Node.js 安装）
+
+### 安装与启动
 
 ```bash
-# Clone the repo and enter the project directory
+# 克隆仓库后进入项目目录
 cd TrailPrint-3D
 
-# Install dependencies
+# 安装依赖
 npm install
 
-# Start dev mode (opens an Electron window)
+# 启动开发模式（会打开 Electron 窗口）
 npm run dev
 ```
 
 ### OpenTopography API Key
 
-Elevation data comes from [OpenTopography](https://portal.opentopography.org/requestService?service=api). After launching the app, enter your key in the **OpenTopography API Key** card at the top of the sidebar ([free registration](https://portal.opentopography.org/requestService?service=api)). Keys are stored locally only and are not shipped with the repo.
+地形高程数据来自 [OpenTopography](https://portal.opentopography.org/requestService?service=api)。启动应用后，在侧栏顶部的 **OpenTopography API Key** 卡片中填写你的 Key（[免费注册申请](https://portal.opentopography.org/requestService?service=api)）。Key 仅保存在本机，不会随仓库分发。
 
-### Optional environment variables
+### 可选环境变量
 
-Copy `.env.example` to `.env` for development options. You can also pre-fill the API key via environment variables (optional):
+复制 `.env.example` 为 `.env` 可配置开发用选项。API Key 也可通过环境变量预填（非必需）：
 
 ```bash
-OPENTOPOGRAPHY_API_KEY=your_key_here
-VITE_OPENTOPOGRAPHY_API_KEY=your_key_here
+OPENTOPOGRAPHY_API_KEY=你的密钥
+VITE_OPENTOPOGRAPHY_API_KEY=你的密钥
 ```
 
-For high-resolution exports or large custom resolutions, you can raise the V8 heap limit (MB, default 8192):
+高精度制版或自定义分辨率较大时，可提高 V8 堆内存上限（单位 MB，默认 8192）：
 
 ```bash
 TRAILPRINT_HEAP_MB=8192
 ```
 
-### Other commands
+### 其他命令
 
-| Command             | Description                              |
-| ------------------- | ---------------------------------------- |
-| `npm run dev`       | Dev mode with hot reload                 |
-| `npm run build`     | Build production output to `out/`        |
-| `npm run preview`   | Preview the built app                    |
-| `npm run package`   | Build and package installers to `release/` |
-| `npm run typecheck` | Run TypeScript type checking             |
-
----
-
-## ✨ Core features
-
-### 🗺️ 1. Framing and map crop
-
-- **Base shape:** Circular, rectangular, or regular polygon crop regions.
-- **Print size:** Scale the model to your actual print dimensions (e.g. 150mm × 150mm).
-- **Map framing:** Pan and zoom on the map to select the trail and terrain area to keep.
-
-### ⛰️ 2. Terrain generation and trail processing
-
-- **Height multiplier:** Exaggerate Z-axis elevation so subtle real-world relief reads at desk scale.
-- **Surface smoothing:** Low, medium, and high smoothing levels to reduce noise and stair-stepping for cleaner prints.
-- **Trail filtering:** Filters GPS drift and noise in GPX data for smoother trail lines.
-
-### 🖼️ 3. Tray base
-
-- **Inset frame structure:** Automatically generates a picture-frame base that wraps the main terrain mesh.
-- **Adjustable parameters:** Set total thickness, inset depth, and border width for different print and display needs.
-
-### 🧩 4. Split printing and assembly
-
-Built for multi-color printing and post-print assembly:
-
-- **Print tolerances:** Separate clearance settings for trail grooves and base slots (e.g. 0.15mm) to compensate for filament expansion.
-- **Magnet holes:** Enter magnet diameter and thickness to auto-generate aligned holes in terrain and base for snap-together assembly without glue.
-- **Fridge-magnet mode:** Optionally add magnet holes on the bottom of the base so the model can stick to ferrous surfaces.
+| 命令                | 说明                                    |
+| ------------------- | --------------------------------------- |
+| `npm run dev`       | 开发模式，热更新                        |
+| `npm run build`     | 构建生产产物到 `out/`                   |
+| `npm run preview`   | 预览构建后的应用                        |
+| `npm run package`   | 构建并打包为安装包（输出到 `release/`） |
+| `npm run typecheck` | TypeScript 类型检查                     |
 
 ---
 
-## 📦 Output files
+## ✨ 核心功能
 
-After generation, you get a zip archive containing these 3 `.stl` files:
+### 🗺️ 1. 构图与地图裁剪
 
-- **`Terrain_Main.stl`:** Main terrain mesh with base thickness and trail grooves cut into the surface.
-- **`Trail_Line.stl`:** Separate trail line mesh with shrink tolerance applied for color-swap printing.
-- **`Tray_Base.stl`:** Tray base with inset groove and magnet holes.
+- **底座形状：** 支持圆形、矩形或正多边形裁剪范围。
+- **打印尺寸：** 按实际打印尺寸（如 150mm × 150mm）等比缩放模型。
+- **地图取景：** 在地图上平移、缩放，框选需要保留的轨迹与地形区域。
 
-Import all three into your slicer, assign colors and print settings, and start printing.
+### ⛰️ 2. 地形生成与轨迹处理
+
+- **高度倍数：** 可按需拉高 Z 轴山体高度，弥补真实地形缩放后起伏不明显的问题。
+- **表面平滑：** 提供低、中、高三档平滑，减少地形毛刺与阶梯感，便于打印。
+- **轨迹过滤：** 过滤 GPX 中的 GPS 漂移与噪点，使路线线条更连贯。
+
+### 🖼️ 3. 托盘底座
+
+- **内嵌式结构：** 自动生成包裹山体主模型的画框式底座。
+- **可调参数：** 可设置总厚度、下陷深度与边框宽度，以适配不同打印与摆放需求。
+
+### 🧩 4. 分件打印与组装
+
+面向多色打印与后期拼装，提供以下能力：
+
+- **打印公差：** 可分别设置轨迹槽与底座槽的预留公差（如 0.15mm），补偿耗材膨胀带来的尺寸偏差。
+- **磁铁孔位：** 输入磁铁直径与厚度后，自动在地形与底座内部生成对齐的孔位，便于磁吸固定，无需胶水。
+- **冰箱贴模式：** 可在底座底部额外生成磁铁孔，使模型可吸附在铁质表面。
 
 ---
 
-## ⭐ Support the project
+## 📦 交付物说明
 
-TrailPrint 3D is maintained by an individual developer. If you find it useful, please star the repo. Feedback and suggestions are welcome via [Issues](https://github.com/baozjj/TrailPrint-3D/issues).
+点击生成后，将获得包含以下 3 个 `.stl` 文件的压缩包：
+
+- **`Terrain_Main.stl`**：带基础厚度的山体主模型，表面已挖出轨迹凹槽。
+- **`Trail_Line.stl`**：独立轨迹线条模型，已应用缩小公差，用于换色打印。
+- **`Tray_Base.stl`**：托盘底座，含内嵌凹槽与磁铁孔位。
+
+将三个文件分别导入切片软件，按需要设置颜色与打印参数后即可开始打印。
+
+---
+
+## ⭐ 支持项目
+
+印迹 TrailPrint 3D 由个人维护。若你觉得它好用，欢迎给仓库点个 Star；有建议或问题，也欢迎通过 [Issues](https://github.com/baozjj/TrailPrint-3D/issues) 反馈。
