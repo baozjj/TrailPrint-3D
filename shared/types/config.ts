@@ -129,6 +129,17 @@ export interface GpxState {
   lastImportError?: string;
 }
 
+// ─── 喷漆分色（任务-09）────────────────────────────────────────────────
+
+export interface SprayPaintConfig {
+  enabled: boolean;
+  colorCount: number;
+  categoryRuleVersion: number;
+  maskShellThicknessMm: number;
+  maskFitToleranceMm: number;
+  bleedMarginMm: number;
+}
+
 // ─── 应用全局配置 ───────────────────────────────────────────────────────
 
 export interface AppConfig {
@@ -138,6 +149,7 @@ export interface AppConfig {
   trail: TrailConfig;
   tray: TrayConfig;
   assembly: AssemblyConfig;
+  sprayPaint: SprayPaintConfig;
 }
 
 export function createDefaultConfig(): AppConfig {
@@ -192,6 +204,14 @@ export function createDefaultConfig(): AppConfig {
         toleranceMm: 0.1,
         circleCount: 3,
       },
+    },
+    sprayPaint: {
+      enabled: false,
+      colorCount: 4,
+      categoryRuleVersion: 1,
+      maskShellThicknessMm: 1.0,
+      maskFitToleranceMm: 0.2,
+      bleedMarginMm: 0.5,
     },
   };
 }

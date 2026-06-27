@@ -2,6 +2,8 @@ import { storeToRefs } from "pinia";
 import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
 import { formatIpcError, ipcGenerateExport } from "@/ipc/client";
+import { useSpraySegmentation } from "@/composables/useSpraySegmentation";
+import { serializeSprayPlan } from "@/utils/ipc-serialize";
 import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
 import { physicalFootprintMm } from "@shared/utils/crop-region";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
@@ -18,6 +20,7 @@ export function useStlExport() {
   const ui = useUiStore();
   const configStore = useConfigStore();
   const { generating, statusMessage } = storeToRefs(ui);
+  const { plan: sprayPlan } = useSpraySegmentation();
 
   async function generateAndSave(): Promise<void> {
     if (!configStore.config.gpx.imported) {
@@ -64,6 +67,10 @@ export function useStlExport() {
         config: exportConfig,
         viewportWidth: vw,
         viewportHeight: vh,
+        sprayPaintPlan:
+          exportConfig.sprayPaint.enabled && sprayPlan.value
+            ? serializeSprayPlan(sprayPlan.value)
+            : undefined,
       });
       if (res.cancelled) {
         statusMessage.value =

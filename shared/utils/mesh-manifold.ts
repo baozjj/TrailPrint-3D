@@ -75,20 +75,48 @@ export function weldMeshVertices(
 ): TerrainMeshPayload {
   const positions = mesh.positions;
   const vertCount = positions.length / 3;
+  if (vertCount === 0) return mesh;
+
   const map = new Int32Array(vertCount);
   map.fill(-1);
   const newPos: number[] = [];
   const tol2 = toleranceMm * toleranceMm;
+  const cellSize = Math.max(toleranceMm, 1e-6);
+  const buckets = new Map<string, number[]>();
+
+  function bucketKey(bx: number, by: number, bz: number): string {
+    return `${bx},${by},${bz}`;
+  }
 
   function findOrAdd(x: number, y: number, z: number): number {
-    for (let i = 0; i < newPos.length / 3; i++) {
-      const dx = newPos[i * 3]! - x;
-      const dy = newPos[i * 3 + 1]! - y;
-      const dz = newPos[i * 3 + 2]! - z;
-      if (dx * dx + dy * dy + dz * dz <= tol2) return i;
+    const bx = Math.floor(x / cellSize);
+    const by = Math.floor(y / cellSize);
+    const bz = Math.floor(z / cellSize);
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const bucket = buckets.get(bucketKey(bx + dx, by + dy, bz + dz));
+          if (!bucket) continue;
+          for (const i of bucket) {
+            const ox = newPos[i * 3]!;
+            const oy = newPos[i * 3 + 1]!;
+            const oz = newPos[i * 3 + 2]!;
+            const ddx = ox - x;
+            const ddy = oy - y;
+            const ddz = oz - z;
+            if (ddx * ddx + ddy * ddy + ddz * ddz <= tol2) return i;
+          }
+        }
+      }
     }
+
     const idx = newPos.length / 3;
     newPos.push(x, y, z);
+    const key = bucketKey(bx, by, bz);
+    const list = buckets.get(key);
+    if (list) list.push(idx);
+    else buckets.set(key, [idx]);
     return idx;
   }
 

@@ -24,7 +24,13 @@ import { generateTerrainMain } from "../terrain/terrain-main-service";
 import { generateTrayBase } from "../tray/tray-service";
 import { assertTrailLineMesh, assertWatertightMesh } from "@shared/utils/mesh-manifold";
 import { writeBinaryStl } from "./stl-writer";
-import { packZip } from "./zip-packager";
+import { packZip, type ZipEntry } from "./zip-packager";
+import { segmentSprayPaint } from "../spray-paint/segment-service";
+import { generateSprayMasks } from "../spray-paint/mask-generate-service";
+import {
+  SPRAY_MANIFEST_FILE_NAME,
+  writeSprayPaintManifest,
+} from "../spray-paint/manifest-writer";
 
 export type ExportProgressCallback = (progress: ExportProgress) => void;
 
@@ -164,17 +170,117 @@ export async function generateModelsZip(
     await writeBinaryStl(trailStl, terrainWithGroove.trailMesh, "Trail_Line");
     await writeBinaryStl(trayStl, trayRes.mesh, "Tray_Base");
 
+    const zipEntries: ZipEntry[] = [
+      { name: STL_FILE_NAMES.terrainMain, filePath: terrainStl },
+      { name: STL_FILE_NAMES.trailLine, filePath: trailStl },
+      { name: STL_FILE_NAMES.trayBase, filePath: trayStl },
+    ];
+
+    if (config.sprayPaint.enabled) {
+      if (!terrainWithGroove.heightPreview || !terrainWithGroove.crop) {
+        throw new IpcException(
+          "SPRAY_NO_TERRAIN",
+          "地形预览数据缺失，无法生成喷漆遮挡罩",
+        );
+      }
+
+      onProgress({
+        phase: "masks",
+        progress: 0.62,
+        message: "正在生成喷漆遮挡罩…",
+      });
+
+      let plan = req.sprayPaintPlan ?? null;
+      try {
+        if (!plan) {
+          onProgress({
+            phase: "masks",
+            progress: 0.64,
+            message: "正在规则分色…",
+          });
+          const segRes = await segmentSprayPaint(
+            {
+              config,
+              heightPreview: terrainWithGroove.heightPreview,
+              crop: terrainWithGroove.crop,
+              viewportWidth,
+              viewportHeight,
+            },
+            (p) => {
+              onProgress({
+                phase: "masks",
+                progress: 0.64 + p.progress * 0.04,
+                message: p.message,
+              });
+            },
+          );
+          plan = segRes.plan;
+        } else {
+          onProgress({
+            phase: "masks",
+            progress: 0.66,
+            message: "复用预览分色方案…",
+          });
+        }
+
+        const maskRes = await generateSprayMasks(
+          {
+            config,
+            plan,
+            heightPreview: terrainWithGroove.heightPreview,
+            crop: terrainWithGroove.crop,
+          },
+          (p) => {
+            onProgress({
+              phase: "masks",
+              progress: 0.68 + p.progress * 0.08,
+              message: p.message,
+            });
+          },
+        );
+
+        if (maskRes.masks.length === 0) {
+          throw new IpcException(
+            "SPRAY_MASK_EMPTY",
+            "未生成任何遮挡罩，请检查分色结果后重试",
+          );
+        }
+
+        for (const mask of maskRes.masks) {
+          if (!mask.indices?.length || mask.indices.length < 3) continue;
+          const maskPath = join(workDir, mask.fileName);
+          await writeBinaryStl(maskPath, mask, mask.fileName);
+          zipEntries.push({ name: mask.fileName, filePath: maskPath });
+        }
+
+        if (zipEntries.length <= 3) {
+          throw new IpcException(
+            "SPRAY_MASK_EMPTY",
+            "遮挡罩网格为空，无法导出",
+          );
+        }
+
+        const manifestPath = join(workDir, SPRAY_MANIFEST_FILE_NAME);
+        await writeSprayPaintManifest(manifestPath, config, plan);
+        zipEntries.push({
+          name: SPRAY_MANIFEST_FILE_NAME,
+          filePath: manifestPath,
+        });
+      } catch (err) {
+        if (err instanceof IpcException) throw err;
+        const msg =
+          err instanceof Error ? err.message : "喷漆遮挡罩生成失败，请重试";
+        throw new IpcException("SPRAY_MASK_FAILED", msg);
+      }
+    }
+
     onProgress({
       phase: "zip",
       progress: 0.78,
       message: "正在打包 ZIP…",
     });
 
-    await packZip(zipTempPath, [
-      { name: STL_FILE_NAMES.terrainMain, filePath: terrainStl },
-      { name: STL_FILE_NAMES.trailLine, filePath: trailStl },
-      { name: STL_FILE_NAMES.trayBase, filePath: trayStl },
-    ]);
+    await packZip(zipTempPath, zipEntries);
 
     onProgress({
       phase: "save",

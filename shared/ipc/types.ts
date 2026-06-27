@@ -90,3 +90,11 @@ export type {
   ExportGenerateResponse,
   ExportProgress
 } from '@shared/types/export'
+export type {
+  SpraySegmentRequest,
+  SpraySegmentResponse,
+  SpraySegmentProgress,
+  SprayGenerateMasksRequest,
+  SprayGenerateMasksResponse,
+  SprayMaskMeshPayload
+} from '@shared/types/spray-paint'

@@ -14,6 +14,7 @@ import TerrainSection from '@/components/sections/TerrainSection.vue'
 import TrailSection from '@/components/sections/TrailSection.vue'
 import TraySection from '@/components/sections/TraySection.vue'
 import AssemblySection from '@/components/sections/AssemblySection.vue'
+import SprayPaintSection from '@/components/sections/SprayPaintSection.vue'
 
 const ui = useUiStore()
 const configStore = useConfigStore()
@@ -120,6 +121,7 @@ function openPreviewModal(): void {
       <TrailSection />
       <TraySection />
       <AssemblySection />
+      <SprayPaintSection />
     </div>
 
     <footer class="sidebar__footer">

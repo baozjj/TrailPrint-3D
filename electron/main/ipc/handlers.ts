@@ -29,6 +29,14 @@ import type {
 } from '@shared/types/export'
 import { generateTrayBase } from '../tray/tray-service'
 import { generateModelsZip, revealExportZip } from '../export/export-service'
+import { segmentSprayPaint } from '../spray-paint/segment-service'
+import { generateSprayMasks } from '../spray-paint/mask-generate-service'
+import type {
+  SpraySegmentRequest,
+  SpraySegmentResponse,
+  SprayGenerateMasksRequest,
+  SprayGenerateMasksResponse,
+} from '@shared/types/spray-paint'
 
 function wrapHandler<Req, Res>(fn: (req: Req) => Res | Promise<Res>) {
   return async (_event: Electron.IpcMainInvokeEvent, req: Req): Promise<Res> => {
@@ -160,5 +168,55 @@ export function registerIpcHandlers(): void {
         throw err
       }
     }
+  )
+
+  ipcMain.handle(
+    IpcChannels.SPRAY_SEGMENT,
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      req: SpraySegmentRequest,
+    ): Promise<SpraySegmentResponse> => {
+      try {
+        if (!req?.config || !req.heightPreview || !req.crop) {
+          throw new IpcException('INVALID_REQUEST', '缺少分色参数')
+        }
+        return await segmentSprayPaint(req, (progress) => {
+          event.sender.send(IpcChannels.SPRAY_PROGRESS, progress)
+        })
+      } catch (err) {
+        if (err instanceof IpcException) {
+          throw new Error(err.message)
+        }
+        if (err instanceof Error) {
+          throw err
+        }
+        throw new Error(String(err))
+      }
+    },
+  )
+
+  ipcMain.handle(
+    IpcChannels.SPRAY_GENERATE_MASKS,
+    async (
+      event: Electron.IpcMainInvokeEvent,
+      req: SprayGenerateMasksRequest,
+    ): Promise<SprayGenerateMasksResponse> => {
+      try {
+        if (!req?.config || !req.plan || !req.heightPreview || !req.crop) {
+          throw new IpcException('INVALID_REQUEST', '缺少遮挡罩参数')
+        }
+        return await generateSprayMasks(req, (progress) => {
+          event.sender.send(IpcChannels.SPRAY_PROGRESS, progress)
+        })
+      } catch (err) {
+        if (err instanceof IpcException) {
+          throw new Error(err.message)
+        }
+        if (err instanceof Error) {
+          throw err
+        }
+        throw new Error(String(err))
+      }
+    },
   )
 }

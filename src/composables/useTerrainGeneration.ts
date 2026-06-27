@@ -1,4 +1,4 @@
-import { onScopeDispose, ref, watch, type Ref } from "vue";
+import { markRaw, onScopeDispose, ref, watch, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useConfigStore } from "@/stores/config";
 import {
@@ -66,9 +66,9 @@ export function useTerrainGeneration(
         viewportHeight: Math.round(h),
       });
       if (id !== requestId) return;
-      lastResult.value = res;
-      mesh.value = res.mesh;
-      trailMesh.value = res.trailMesh;
+      lastResult.value = markRaw(res);
+      mesh.value = res.mesh ? markRaw(res.mesh) : null;
+      trailMesh.value = res.trailMesh ? markRaw(res.trailMesh) : null;
       progress.value = {
         phase: "done",
         progress: 1,

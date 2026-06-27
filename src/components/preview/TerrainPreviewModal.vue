@@ -1,11 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { storeToRefs } from "pinia";
 import TerrainMeshPreview from "@/components/preview/TerrainMeshPreview.vue";
+import { useSpraySegmentation } from "@/composables/useSpraySegmentation";
+import { useSprayMaskPreview } from "@/composables/useSprayMaskPreview";
+import { useConfigStore } from "@/stores/config";
+import { useUiStore } from "@/stores/ui";
 import type {
   TerrainGenerateProgress,
   TerrainGenerateResponse,
   TerrainSceneProgress,
 } from "@shared/types/terrain";
+import type { SprayMaskViewMode } from "@shared/types/spray-paint";
 import type { TrayMeshPayload } from "@shared/types/tray";
 
 const PREVIEW_STEPS = [
@@ -59,6 +65,165 @@ const emit = defineEmits<{
   opened: [];
   download: [];
 }>();
+
+const configStore = useConfigStore();
+const ui = useUiStore();
+const { config } = storeToRefs(configStore);
+
+const sprayPanelOpen = ref(true);
+const {
+  plan: sprayPlan,
+  masks: sprayMasks,
+  maskWarnings,
+  segmenting,
+  generatingMasks,
+  progress: sprayProgress,
+  error: sprayError,
+  maskError,
+  runSegmentation,
+  runMaskGeneration,
+  updateColorHex,
+  paintMode,
+  paintRegionId,
+  paintBrushRadius,
+  selectPaintBrush,
+  setPaintMode,
+  startManualPaint,
+  addColorSlot,
+  removeColorSlot,
+  resetPlan,
+  SPRAY_COLOR_COUNT_MAX,
+  SPRAY_COLOR_COUNT_MIN,
+} = useSpraySegmentation();
+
+const previewRef = ref<InstanceType<typeof TerrainMeshPreview> | null>(null);
+
+const {
+  uiState: sprayUiState,
+  activeMaskIndex,
+  selectColorSlot,
+  toggleFitMask,
+  setViewMode,
+  hideAllMasks,
+  showAllMasksToggle,
+  reset: resetMaskPreview,
+  onMasksGenerated,
+} = useSprayMaskPreview();
+
+const MASK_VIEW_MODES: { value: SprayMaskViewMode; label: string }[] = [
+  { value: "terrain-colors", label: "山体分色" },
+  { value: "terrain-plus-mask", label: "山体+罩" },
+  { value: "mask-only", label: "仅罩" },
+];
+
+const sprayEnabled = computed(() => config.value.sprayPaint.enabled);
+
+const canSegment = computed(
+  () =>
+    !props.generating &&
+    !segmenting.value &&
+    !generatingMasks.value &&
+    props.result?.heightPreview != null &&
+    !props.error,
+);
+
+const canGenerateMasks = computed(
+  () =>
+    canSegment.value &&
+    sprayPlan.value != null &&
+    !generatingMasks.value,
+);
+
+const sprayStatusMessage = computed(() => {
+  if (segmenting.value) {
+    return sprayProgress.value?.message ?? "正在分色…";
+  }
+  if (generatingMasks.value) {
+    return sprayProgress.value?.message ?? "正在生成遮挡罩…";
+  }
+  if (sprayError.value) return sprayError.value;
+  if (maskError.value) return maskError.value;
+  if (sprayPlan.value?.warning) return sprayPlan.value.warning;
+  if (sprayMasks.value.length > 0) return "遮挡罩已生成，点击列表项套合预览";
+  if (sprayPlan.value) {
+    if (paintMode.value) return "涂色模式：在 3D 山体上按住拖动涂抹";
+    return "可手涂分色，或规则分色后生成遮挡罩";
+  }
+  return "点击「手涂分色」或「规则分色」开始";
+});
+
+const colorCount = computed(() => config.value.sprayPaint.colorCount);
+
+const canAddColor = computed(
+  () => colorCount.value < SPRAY_COLOR_COUNT_MAX && Boolean(sprayPlan.value),
+);
+
+const canRemoveColor = computed(
+  () => colorCount.value > SPRAY_COLOR_COUNT_MIN && Boolean(sprayPlan.value),
+);
+
+function onSelectColorSlot(slot: { index: number; regionId: number }): void {
+  selectPaintBrush(slot.regionId);
+}
+
+const colorInputRefs = new Map<number, HTMLInputElement>();
+
+function setColorInputRef(regionId: number, el: unknown): void {
+  if (el instanceof HTMLInputElement) {
+    colorInputRefs.set(regionId, el);
+  } else {
+    colorInputRefs.delete(regionId);
+  }
+}
+
+function openColorPicker(regionId: number): void {
+  colorInputRefs.get(regionId)?.click();
+}
+
+function onStartManualPaint(): void {
+  if (!props.result) return;
+  config.value.sprayPaint.enabled = true;
+  resetMaskPreview();
+  hideAllMasks();
+  if (!startManualPaint(config.value, props.result, 0)) return;
+  void nextTick(() => previewRef.value?.refreshSprayColors());
+}
+
+async function onRunSegmentation(): Promise<void> {
+  if (!props.result) return;
+  config.value.sprayPaint.enabled = true;
+  resetMaskPreview();
+  setPaintMode(false);
+  await runSegmentation(
+    configStore.toSnapshot(),
+    props.result,
+    ui.previewViewport.w,
+    ui.previewViewport.h,
+  );
+}
+
+async function onGenerateMasks(): Promise<void> {
+  if (!props.result) return;
+  const res = await runMaskGeneration(configStore.toSnapshot(), props.result);
+  if (!res) return;
+  onMasksGenerated(res.masks);
+}
+
+function onSprayToggle(enabled: boolean): void {
+  config.value.sprayPaint.enabled = enabled;
+  if (!enabled) {
+    resetPlan();
+    resetMaskPreview();
+  }
+}
+
+watch(
+  () => props.result?.generationMs,
+  () => {
+    resetPlan();
+    resetMaskPreview();
+  },
+);
 
 const canDownload = computed(
   () =>
@@ -193,6 +358,16 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             <div class="terrain-modal__actions">
               <button
                 type="button"
+                class="terrain-modal__spray-toggle"
+                :class="{ 'terrain-modal__spray-toggle--active': sprayPanelOpen }"
+                aria-label="喷漆分色面板"
+                title="喷漆分色"
+                @click="sprayPanelOpen = !sprayPanelOpen"
+              >
+                喷漆分色
+              </button>
+              <button
+                type="button"
                 class="terrain-modal__download"
                 :disabled="!canDownload"
                 @click="emit('download')"
@@ -249,7 +424,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
           </header>
 
           <div ref="bodyRef" class="terrain-modal__body">
-            <div v-if="showLoadingOverlay" class="terrain-modal__loading">
+            <div class="terrain-modal__main">
+              <div v-if="showLoadingOverlay" class="terrain-modal__loading">
               <div class="terrain-modal__spinner" aria-hidden="true" />
               <p class="terrain-modal__loading-title">{{ loadingTitle }}</p>
               <p class="terrain-modal__loading-hint">{{ loadingHint }}</p>
@@ -301,6 +477,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
             </div>
 
             <TerrainMeshPreview
+              ref="previewRef"
               class="terrain-modal__preview"
               :class="{
                 'terrain-modal__preview--hidden':
@@ -310,10 +487,258 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
               :tray-mesh="trayMesh"
               :generating="generating"
               :error="error"
+              :spray-enabled="sprayEnabled && sprayPlan != null"
+              :spray-plan="sprayPlan"
+              :spray-masks="sprayMasks"
+              :spray-ui-state="sprayUiState"
+              :spray-paint-mode="paintMode"
+              :spray-paint-region-id="paintRegionId"
               overlay-loading
               @scene-loading-change="onSceneLoadingChange"
               @scene-progress="onSceneProgress"
             />
+            </div>
+
+            <aside
+              v-if="sprayPanelOpen"
+              class="terrain-modal__spray-panel"
+              aria-label="喷漆分色"
+            >
+              <div class="spray-panel__section">
+                <label class="spray-panel__toggle">
+                  <input
+                    type="checkbox"
+                    :checked="sprayEnabled"
+                    @change="
+                      onSprayToggle(
+                        ($event.target as HTMLInputElement).checked,
+                      )
+                    "
+                  />
+                  <span>启用喷漆分色</span>
+                </label>
+              </div>
+
+              <div class="spray-panel__section spray-panel__actions">
+                <button
+                  type="button"
+                  class="spray-panel__btn spray-panel__btn--primary"
+                  :disabled="!canSegment"
+                  @click="onStartManualPaint"
+                >
+                  手涂分色
+                </button>
+                <button
+                  type="button"
+                  class="spray-panel__btn"
+                  :disabled="!canSegment"
+                  @click="onRunSegmentation"
+                >
+                  {{ segmenting ? "分色中…" : "规则分色（离线）" }}
+                </button>
+                <button
+                  type="button"
+                  class="spray-panel__btn"
+                  :disabled="!canSegment || !sprayPlan"
+                  @click="onRunSegmentation"
+                >
+                  重新分区
+                </button>
+                <button
+                  type="button"
+                  class="spray-panel__btn spray-panel__btn--primary"
+                  :disabled="!canGenerateMasks"
+                  @click="onGenerateMasks"
+                >
+                  {{ generatingMasks ? "生成中…" : "生成遮挡罩" }}
+                </button>
+              </div>
+
+              <p
+                class="spray-panel__status"
+                :class="{
+                  'spray-panel__status--err': Boolean(sprayError || maskError),
+                }"
+              >
+                {{ sprayStatusMessage }}
+              </p>
+
+              <div
+                v-if="maskWarnings.length"
+                class="spray-panel__warnings"
+                role="status"
+              >
+                <p
+                  v-for="(warn, i) in maskWarnings"
+                  :key="i"
+                  class="spray-panel__warning-item"
+                >
+                  {{ warn }}
+                </p>
+              </div>
+
+              <div v-if="sprayPlan" class="spray-panel__colors">
+                <div class="spray-panel__colors-header">
+                  <p class="spray-panel__colors-title">
+                    色板（{{ sprayPlan.colors.length }} 色）
+                  </p>
+                  <div class="spray-panel__color-actions">
+                    <button
+                      type="button"
+                      class="spray-panel__icon-btn"
+                      :disabled="!canRemoveColor || !sprayEnabled"
+                      title="减少颜色"
+                      @click="removeColorSlot(config)"
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      class="spray-panel__icon-btn"
+                      :disabled="!canAddColor || !sprayEnabled"
+                      title="添加颜色"
+                      @click="addColorSlot(config)"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div class="spray-panel__paint-toolbar">
+                  <button
+                    type="button"
+                    class="spray-panel__btn spray-panel__btn--toggle"
+                    :class="{ 'spray-panel__btn--toggle-active': paintMode }"
+                    :disabled="!sprayEnabled"
+                    @click="setPaintMode(!paintMode)"
+                  >
+                    {{ paintMode ? "涂色中…" : "涂抹工具" }}
+                  </button>
+                  <label v-if="paintMode" class="spray-panel__brush">
+                    <span>笔刷</span>
+                    <input
+                      v-model.number="paintBrushRadius"
+                      type="range"
+                      min="1"
+                      max="8"
+                      step="1"
+                    />
+                    <span>{{ paintBrushRadius }}</span>
+                  </label>
+                </div>
+
+                <p v-if="paintMode" class="spray-panel__paint-hint">
+                  选中色块后在 3D 山体上按住拖动涂抹；双击色块可改色
+                </p>
+                <div class="spray-panel__swatches">
+                  <button
+                    v-for="slot in sprayPlan.colors"
+                    :key="slot.regionId"
+                    type="button"
+                    class="spray-panel__swatch"
+                    :class="{
+                      'spray-panel__swatch--active':
+                        paintRegionId === slot.regionId && paintMode,
+                    }"
+                    :style="{ backgroundColor: slot.hex }"
+                    :disabled="!sprayEnabled"
+                    :title="`颜色 ${String(slot.index).padStart(2, '0')} · 双击改色`"
+                    @click="onSelectColorSlot(slot)"
+                    @dblclick.prevent="openColorPicker(slot.regionId)"
+                  >
+                    <input
+                      :ref="(el) => setColorInputRef(slot.regionId, el)"
+                      type="color"
+                      class="spray-panel__swatch-input"
+                      :value="slot.hex"
+                      :disabled="!sprayEnabled"
+                      tabindex="-1"
+                      @click.stop
+                      @input="
+                        updateColorHex(
+                          slot.regionId,
+                          ($event.target as HTMLInputElement).value,
+                        )
+                      "
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="sprayMasks.length" class="spray-panel__masks">
+                <div class="spray-panel__masks-header">
+                  <p class="spray-panel__colors-title">遮挡罩套合</p>
+                  <div class="spray-panel__masks-actions">
+                    <button
+                      type="button"
+                      class="spray-panel__link-btn"
+                      @click="showAllMasksToggle"
+                    >
+                      显示全部
+                    </button>
+                    <button
+                      type="button"
+                      class="spray-panel__link-btn"
+                      @click="hideAllMasks"
+                    >
+                      隐藏全部
+                    </button>
+                  </div>
+                </div>
+
+                <div
+                  class="spray-panel__view-modes"
+                  role="tablist"
+                  aria-label="预览视图模式"
+                >
+                  <button
+                    v-for="mode in MASK_VIEW_MODES"
+                    :key="mode.value"
+                    type="button"
+                    role="tab"
+                    class="spray-panel__view-mode"
+                    :class="{
+                      'spray-panel__view-mode--active':
+                        sprayUiState.viewMode === mode.value,
+                    }"
+                    :aria-selected="sprayUiState.viewMode === mode.value"
+                    @click="setViewMode(mode.value)"
+                  >
+                    {{ mode.label }}
+                  </button>
+                </div>
+
+                <button
+                  v-for="mask in sprayMasks"
+                  :key="mask.fileName"
+                  type="button"
+                  class="spray-panel__mask-row"
+                  :class="{
+                    'spray-panel__mask-row--active':
+                      activeMaskIndex === mask.colorIndex,
+                    'spray-panel__mask-row--fit':
+                      sprayUiState.fitMaskIndex === mask.colorIndex,
+                  }"
+                  @click="toggleFitMask(mask.colorIndex)"
+                >
+                  <span class="spray-panel__mask-fit-dot" aria-hidden="true" />
+                  <span class="spray-panel__mask-name">{{ mask.fileName }}</span>
+                  <span
+                    v-if="sprayUiState.fitMaskIndex === mask.colorIndex"
+                    class="spray-panel__mask-badge"
+                  >
+                    套合中
+                  </span>
+                </button>
+              </div>
+
+              <p
+                v-else-if="sprayPlan && !generatingMasks"
+                class="spray-panel__empty"
+              >
+                生成遮挡罩后，可套合检查：本区开窗漏出，其他区遮挡（每次只用一块罩喷漆）
+              </p>
+            </aside>
           </div>
         </div>
       </div>
@@ -338,7 +763,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 .terrain-modal__panel {
   display: flex;
   flex-direction: column;
-  width: min(960px, 100%);
+  width: min(1180px, 100%);
   height: min(720px, calc(100vh - 48px));
   border-radius: var(--tp-radius-panel);
   background: #1a1c2e;
@@ -367,6 +792,24 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.terrain-modal__spray-toggle {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--tp-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--tp-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.terrain-modal__spray-toggle--active {
+  border-color: var(--tp-text-accent);
+  color: var(--tp-text-accent);
+  background: rgba(0, 122, 255, 0.06);
 }
 
 .terrain-modal__download {
@@ -418,6 +861,351 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   position: relative;
   flex: 1;
   min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+
+.terrain-modal__main {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.terrain-modal__spray-panel {
+  flex-shrink: 0;
+  width: 280px;
+  padding: 14px 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.96);
+  overflow-y: auto;
+}
+
+.spray-panel__section {
+  margin-bottom: 12px;
+}
+
+.spray-panel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tp-text-primary);
+  cursor: pointer;
+}
+
+.spray-panel__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spray-panel__btn {
+  height: 34px;
+  border: 1px solid var(--tp-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--tp-text-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.spray-panel__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spray-panel__btn--primary {
+  border: none;
+  background: var(--tp-cta);
+  color: #fff;
+  font-weight: 600;
+}
+
+.spray-panel__status {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--tp-text-secondary);
+}
+
+.spray-panel__status--err {
+  color: #c62828;
+}
+
+.spray-panel__colors-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tp-text-secondary);
+}
+
+.spray-panel__swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.spray-panel__swatch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 2px solid rgba(0, 0, 0, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.spray-panel__swatch:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.spray-panel__swatch--active {
+  border-color: var(--tp-text-accent);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.28);
+}
+
+.spray-panel__swatch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.spray-panel__swatch-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.spray-panel__paint-hint {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--tp-text-accent);
+}
+
+.spray-panel__colors-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.spray-panel__colors-header .spray-panel__colors-title {
+  margin: 0;
+}
+
+.spray-panel__color-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.spray-panel__icon-btn {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--tp-border-strong);
+  border-radius: 6px;
+  background: #fff;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.spray-panel__icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spray-panel__paint-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.spray-panel__btn--toggle {
+  height: 32px;
+  font-size: 12px;
+}
+
+.spray-panel__btn--toggle-active {
+  border-color: var(--tp-text-accent);
+  color: var(--tp-text-accent);
+  background: rgba(0, 122, 255, 0.08);
+}
+
+.spray-panel__brush {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--tp-text-secondary);
+}
+
+.spray-panel__brush input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.spray-panel__label-input {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--tp-border-strong);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--tp-text-primary);
+  background: #fff;
+}
+
+.spray-panel__masks {
+  margin-top: 4px;
+}
+
+.spray-panel__masks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.spray-panel__masks-header .spray-panel__colors-title {
+  margin: 0;
+}
+
+.spray-panel__masks-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.spray-panel__link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 11px;
+  color: var(--tp-text-accent);
+  cursor: pointer;
+}
+
+.spray-panel__link-btn:hover {
+  text-decoration: underline;
+}
+
+.spray-panel__view-modes {
+  display: flex;
+  margin-bottom: 10px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--tp-bg-input);
+}
+
+.spray-panel__view-mode {
+  flex: 1;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 11px;
+  color: var(--tp-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.spray-panel__view-mode--active {
+  background: #fff;
+  color: var(--tp-text-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.spray-panel__mask-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--tp-border-strong);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 12px;
+  color: var(--tp-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.spray-panel__mask-row:hover {
+  border-color: rgba(0, 122, 255, 0.35);
+}
+
+.spray-panel__mask-row--active {
+  border-color: var(--tp-text-accent);
+}
+
+.spray-panel__mask-row--fit {
+  background: rgba(0, 122, 255, 0.06);
+}
+
+.spray-panel__mask-fit-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--tp-border-strong);
+}
+
+.spray-panel__mask-row--fit .spray-panel__mask-fit-dot {
+  background: var(--tp-text-accent);
+}
+
+.spray-panel__mask-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.spray-panel__mask-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tp-text-accent);
+  background: rgba(0, 122, 255, 0.1);
+}
+
+.spray-panel__warnings {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 152, 0, 0.1);
+  border: 1px solid rgba(255, 152, 0, 0.35);
+}
+
+.spray-panel__warning-item {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #e65100;
+}
+
+.spray-panel__warning-item + .spray-panel__warning-item {
+  margin-top: 4px;
+}
+
+.spray-panel__empty {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--tp-text-secondary);
 }
 
 .terrain-modal__loading {

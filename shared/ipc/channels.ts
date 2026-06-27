@@ -23,7 +23,13 @@ export const IpcChannels = {
   /** 主进程 → 渲染进程：导出进度 */
   EXPORT_PROGRESS: 'export:progress',
   /** 在文件管理器中显示已导出的 ZIP */
-  EXPORT_REVEAL: 'export:reveal'
+  EXPORT_REVEAL: 'export:reveal',
+  /** 喷漆分色：规则映射生成 cellRegions */
+  SPRAY_SEGMENT: 'spray:segment',
+  /** 主进程 → 渲染进程：喷漆分色进度 */
+  SPRAY_PROGRESS: 'spray:progress',
+  /** 喷漆分色：生成遮挡罩 mesh */
+  SPRAY_GENERATE_MASKS: 'spray:generate-masks'
 } as const
 
 export type IpcChannel = (typeof IpcChannels)[keyof typeof IpcChannels]

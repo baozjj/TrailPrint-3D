@@ -16,7 +16,12 @@ import type {
   TrayGenerateResponse,
   ExportGenerateRequest,
   ExportGenerateResponse,
-  ExportProgress
+  ExportProgress,
+  SpraySegmentRequest,
+  SpraySegmentResponse,
+  SpraySegmentProgress,
+  SprayGenerateMasksRequest,
+  SprayGenerateMasksResponse
 } from '@shared/ipc/types'
 import { isIpcError, type IpcError } from '@shared/ipc/types'
 
@@ -76,6 +81,10 @@ const api = {
     invoke<ExportGenerateResponse>(IpcChannels.EXPORT_GENERATE, req),
   revealExport: (zipPath: string) =>
     invoke<{ ok: true }>(IpcChannels.EXPORT_REVEAL, zipPath),
+  segmentSprayPaint: (req: SpraySegmentRequest) =>
+    invoke<SpraySegmentResponse>(IpcChannels.SPRAY_SEGMENT, req),
+  generateSprayMasks: (req: SprayGenerateMasksRequest) =>
+    invoke<SprayGenerateMasksResponse>(IpcChannels.SPRAY_GENERATE_MASKS, req),
   onExportProgress: (callback: (progress: ExportProgress) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, progress: ExportProgress) => {
       callback(progress)
@@ -95,6 +104,18 @@ const api = {
     ipcRenderer.on(IpcChannels.TERRAIN_PROGRESS, handler)
     return () => {
       ipcRenderer.removeListener(IpcChannels.TERRAIN_PROGRESS, handler)
+    }
+  },
+  onSprayProgress: (callback: (progress: SpraySegmentProgress) => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: SpraySegmentProgress,
+    ) => {
+      callback(progress)
+    }
+    ipcRenderer.on(IpcChannels.SPRAY_PROGRESS, handler)
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.SPRAY_PROGRESS, handler)
     }
   },
 }

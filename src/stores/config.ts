@@ -54,11 +54,18 @@ function ensureMagnetConfigDefaults(cfg: AppConfig): void {
   }
 }
 
+function ensureSprayPaintDefaults(cfg: AppConfig): void {
+  if (!cfg.sprayPaint) {
+    cfg.sprayPaint = createDefaultConfig().sprayPaint;
+  }
+}
+
 export const useConfigStore = defineStore("config", () => {
   const config = ref<AppConfig>(createDefaultConfig());
   applyOpenTopoApiKey(config.value);
   ensureTrailConfigDefaults(config.value);
   ensureMagnetConfigDefaults(config.value);
+  ensureSprayPaintDefaults(config.value);
 
   watch(
     () => config.value.terrain.openTopographyApiKey,
@@ -78,6 +85,7 @@ export const useConfigStore = defineStore("config", () => {
     applyOpenTopoApiKey(config.value);
     ensureTrailConfigDefaults(config.value);
     ensureMagnetConfigDefaults(config.value);
+    ensureSprayPaintDefaults(config.value);
   }
 
   function patchConfig(partial: Partial<AppConfig>): void {

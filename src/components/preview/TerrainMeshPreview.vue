@@ -16,10 +16,16 @@ import type { TrayMeshPayload } from "@shared/types/tray";
 import {
   trailPreviewTubeSegments,
 } from "@shared/utils/terrain-mesh-quality";
+import type { SprayMaskMeshPayload, SprayMaskUiState, SprayPaintPlan } from "@shared/types/spray-paint";
+import { hexToRgb } from "@shared/utils/lab-color";
+import { applySprayVertexColors, patchSprayVertexColorsForCells } from "@/utils/spray-vertex-colors";
+import { rayPickHeightfieldLocalMm } from "@/utils/terrain-heightfield-pick";
+import { useSpraySegmentation } from "@/composables/useSpraySegmentation";
 import { storeToRefs } from "pinia";
 
 const configStore = useConfigStore();
 const { config } = storeToRefs(configStore);
+const { paintAtMm, endPaintStroke } = useSpraySegmentation();
 
 const props = defineProps<{
   result: TerrainGenerateResponse | null;
@@ -27,6 +33,12 @@ const props = defineProps<{
   generating?: boolean;
   error?: string | null;
   overlayLoading?: boolean;
+  sprayEnabled?: boolean;
+  sprayPlan?: SprayPaintPlan | null;
+  sprayMasks?: SprayMaskMeshPayload[];
+  sprayUiState?: SprayMaskUiState | null;
+  sprayPaintMode?: boolean;
+  sprayPaintRegionId?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -49,13 +61,23 @@ let camera: THREE.PerspectiveCamera | null = null;
 let controls: OrbitControls | null = null;
 let trayRoot: THREE.Group | null = null;
 let terrainRoot: THREE.Group | null = null;
+let maskRoot: THREE.Group | null = null;
 let overlayRoot: THREE.Group | null = null;
 let terrainMaterial: THREE.MeshStandardMaterial | null = null;
 let trayMaterial: THREE.MeshLambertMaterial | null = null;
-let satelliteTexture: THREE.CanvasTexture | null = null;
+let terrainMeshRef: THREE.Mesh | null = null;
 let animationId = 0;
 let resizeObserver: ResizeObserver | null = null;
 let rebuildToken = 0;
+let maskRebuildToken = 0;
+const raycaster = new THREE.Raycaster();
+const paintPointer = new THREE.Vector2();
+const terrainLocalMatrix = new THREE.Matrix4();
+let isPainting = false;
+let paintCanvas: HTMLCanvasElement | null = null;
+let pendingPaintX: number | null = null;
+let pendingPaintY: number | null = null;
+let paintFrameRaf = 0;
 
 const trailMaterial = new THREE.MeshBasicMaterial({
   color: 0xe84335,
@@ -72,9 +94,37 @@ const demLabel = computed(() => {
   return `3D 地形预览 · DEM ${grid} · ${r.generationMs}ms`;
 });
 
-function disposeSatelliteTexture(): void {
-  satelliteTexture?.dispose();
-  satelliteTexture = null;
+function applySprayColorsToTerrain(
+  mesh: THREE.Mesh,
+  crop: NonNullable<TerrainGenerateResponse["crop"]>,
+  preview: NonNullable<TerrainGenerateResponse["heightPreview"]>,
+): void {
+  const plan = props.sprayPlan;
+  if (!props.sprayEnabled || !plan) return;
+  applySprayVertexColors(
+    mesh.geometry as THREE.BufferGeometry,
+    crop,
+    plan.cellRegions,
+    plan.gridCols,
+    plan.gridRows,
+    plan.colors,
+    preview.bottomZ,
+  );
+  const mat = mesh.material as THREE.MeshStandardMaterial;
+  mat.vertexColors = true;
+  mat.map = null;
+  mat.color.setHex(0xffffff);
+  mat.needsUpdate = true;
+}
+
+function resetTerrainMaterial(mesh: THREE.Mesh): void {
+  const mat = mesh.material as THREE.MeshStandardMaterial;
+  mat.vertexColors = false;
+  mat.map = null;
+  mat.color.setHex(0xf3ead6);
+  const geo = mesh.geometry as THREE.BufferGeometry;
+  geo.deleteAttribute("color");
+  mat.needsUpdate = true;
 }
 
 function ensureTerrainMaterial(): THREE.MeshStandardMaterial {
@@ -112,8 +162,119 @@ function reportScene(
   emit("scene-progress", { phase, progress, message });
 }
 
+function disposeObjectMaterials(root: THREE.Object3D): void {
+  root.traverse((child: THREE.Object3D) => {
+    if (child instanceof THREE.Mesh) {
+      const mats = Array.isArray(child.material)
+        ? child.material
+        : [child.material];
+      for (const m of mats) m.dispose();
+    }
+  });
+}
+
+function applyMaskViewState(): void {
+  const state = props.sprayUiState;
+  const showTerrain = !state || state.viewMode !== "mask-only";
+
+  if (terrainRoot) terrainRoot.visible = showTerrain;
+  if (trayRoot) trayRoot.visible = showTerrain;
+  if (overlayRoot) overlayRoot.visible = showTerrain;
+  if (!maskRoot) return;
+
+  for (const child of maskRoot.children) {
+    if (!(child instanceof THREE.Mesh)) continue;
+    const colorIndex = child.userData.colorIndex as number;
+    const mat = child.material as THREE.MeshStandardMaterial;
+
+    let visible = false;
+    let opacity = 0.45;
+
+    if (!state) {
+      child.visible = false;
+      continue;
+    }
+
+    switch (state.viewMode) {
+      case "terrain-colors":
+        visible = false;
+        break;
+      case "terrain-plus-mask":
+        if (state.showAllMasks) {
+          visible = true;
+          opacity = colorIndex === state.fitMaskIndex ? 0.45 : 0.28;
+        } else if (state.fitMaskIndex != null) {
+          visible = colorIndex === state.fitMaskIndex;
+          opacity = 0.45;
+        }
+        break;
+      case "mask-only":
+        if (state.fitMaskIndex != null) {
+          visible = colorIndex === state.fitMaskIndex;
+          opacity = 0.85;
+        }
+        break;
+    }
+
+    child.visible = visible;
+    mat.opacity = opacity;
+    mat.needsUpdate = true;
+  }
+}
+
+function rebuildMaskMeshes(assemblyOffsetZ: number): void {
+  void rebuildMaskMeshesAsync(assemblyOffsetZ);
+}
+
+async function rebuildMaskMeshesAsync(assemblyOffsetZ: number): Promise<void> {
+  if (!maskRoot) return;
+  const token = ++maskRebuildToken;
+  disposeMeshGeometries(maskRoot);
+  disposeObjectMaterials(maskRoot);
+  maskRoot.clear();
+  maskRoot.position.z = assemblyOffsetZ;
+
+  const masks = props.sprayMasks ?? [];
+  const plan = props.sprayPlan;
+  if (!masks.length) return;
+
+  for (const mask of masks) {
+    if (token !== maskRebuildToken || !maskRoot) return;
+    if (!mask.positions?.length || !mask.indices?.length) continue;
+
+    const geo = payloadToBufferGeometry(mask);
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    if (token !== maskRebuildToken || !maskRoot) {
+      geo.dispose();
+      return;
+    }
+    geo.computeVertexNormals();
+
+    const slot = plan?.colors.find((c) => c.index === mask.colorIndex);
+    const rgb = slot ? hexToRgb(slot.hex) : { r: 180, g: 180, b: 180 };
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(rgb.r / 255, rgb.g / 255, rgb.b / 255),
+      transparent: true,
+      opacity: 0.45,
+      roughness: 0.75,
+      metalness: 0.02,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 1;
+    mesh.userData.colorIndex = mask.colorIndex;
+    mesh.visible = false;
+    maskRoot.add(mesh);
+  }
+
+  applyMaskViewState();
+}
+
 async function rebuildScene(): Promise<void> {
-  if (!trayRoot || !terrainRoot || !overlayRoot || !camera || !controls) return;
+  if (!trayRoot || !terrainRoot || !maskRoot || !overlayRoot || !camera || !controls) return;
 
   const token = ++rebuildToken;
   sceneBuilding.value = true;
@@ -122,15 +283,17 @@ async function rebuildScene(): Promise<void> {
 
   disposeMeshGeometries(trayRoot);
   disposeMeshGeometries(terrainRoot);
+  disposeMeshGeometries(maskRoot);
   disposeMeshGeometries(overlayRoot);
   trayRoot.clear();
   terrainRoot.clear();
+  maskRoot.clear();
   overlayRoot.clear();
   trayRoot.position.z = 0;
   terrainRoot.position.z = 0;
+  maskRoot.position.z = 0;
   overlayRoot.position.z = 0;
   statusHint.value = null;
-  disposeSatelliteTexture();
 
   const r = props.result;
   if (!r?.heightPreview || !r.crop) {
@@ -164,12 +327,17 @@ async function rebuildScene(): Promise<void> {
 
   const mat = ensureTerrainMaterial();
   mat.map = null;
-  mat.vertexColors = false;
   mat.needsUpdate = true;
 
   const terrainMesh = new THREE.Mesh(terrainGeo, mat);
   terrainMesh.frustumCulled = false;
   terrainMesh.renderOrder = 0;
+  if (props.sprayEnabled && props.sprayPlan) {
+    applySprayColorsToTerrain(terrainMesh, r.crop, preview);
+  } else {
+    resetTerrainMaterial(terrainMesh);
+  }
+  terrainMeshRef = terrainMesh;
   terrainRoot.add(terrainMesh);
 
   imageryLoading.value = false;
@@ -179,7 +347,9 @@ async function rebuildScene(): Promise<void> {
 
   const assemblyOffsetZ = computeTerrainAssemblyOffsetZMm(config.value);
   terrainRoot.position.z = assemblyOffsetZ;
+  maskRoot.position.z = assemblyOffsetZ;
   overlayRoot.position.z = assemblyOffsetZ;
+  rebuildMaskMeshes(assemblyOffsetZ);
 
   const tray = props.trayMesh;
   if (tray?.positions?.length && tray.indices?.length) {
@@ -279,9 +449,11 @@ function initThree(container: HTMLDivElement): void {
 
   trayRoot = new THREE.Group();
   terrainRoot = new THREE.Group();
+  maskRoot = new THREE.Group();
   overlayRoot = new THREE.Group();
   scene.add(trayRoot);
   scene.add(terrainRoot);
+  scene.add(maskRoot);
   scene.add(overlayRoot);
 
   scene.add(new THREE.HemisphereLight(0xdceefb, 0x4a5a48, 0.55));
@@ -310,9 +482,150 @@ function initThree(container: HTMLDivElement): void {
 
   resizeObserver = new ResizeObserver(resize);
   resizeObserver.observe(container);
+
+  paintCanvas = renderer.domElement;
+  paintCanvas.addEventListener("pointerdown", onPaintPointerDown);
+  paintCanvas.addEventListener("pointermove", onPaintPointerMove);
+  paintCanvas.addEventListener("pointerup", onPaintPointerUp);
+  paintCanvas.addEventListener("pointerleave", onPaintPointerUp);
+}
+
+function patchPaintColors(changed: Set<number>): void {
+  if (
+    !changed.size ||
+    !terrainMeshRef ||
+    !props.result?.crop ||
+    !props.result.heightPreview ||
+    !props.sprayEnabled ||
+    !props.sprayPlan
+  ) {
+    return;
+  }
+  patchSprayVertexColorsForCells(
+    terrainMeshRef.geometry as THREE.BufferGeometry,
+    props.result.crop,
+    props.sprayPlan.cellRegions,
+    props.sprayPlan.gridCols,
+    props.sprayPlan.gridRows,
+    props.sprayPlan.colors,
+    props.result.heightPreview.bottomZ,
+    changed,
+  );
+}
+
+function paintAtClientImpl(clientX: number, clientY: number): void {
+  if (
+    !renderer ||
+    !camera ||
+    !terrainMeshRef ||
+    !terrainRoot ||
+    !props.result?.crop ||
+    !props.result.heightPreview ||
+    props.sprayPaintRegionId == null
+  ) {
+    return;
+  }
+  const rect = renderer.domElement.getBoundingClientRect();
+  paintPointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+  paintPointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(paintPointer, camera);
+  terrainRoot.updateMatrixWorld(true);
+  terrainLocalMatrix.copy(terrainRoot.matrixWorld);
+  const hit = rayPickHeightfieldLocalMm(
+    raycaster.ray,
+    terrainLocalMatrix,
+    props.result.crop,
+    props.result.heightPreview,
+  );
+  if (!hit) return;
+  const changed = paintAtMm(
+    props.result.crop,
+    hit.xMm,
+    hit.yMm,
+    props.sprayPaintRegionId,
+  );
+  patchPaintColors(changed);
+}
+
+/** 每帧合并多次 pointermove，跟显示刷新对齐且不丢最后一帧位置 */
+function paintAtClient(clientX: number, clientY: number, immediate = false): void {
+  if (immediate) {
+    pendingPaintX = null;
+    pendingPaintY = null;
+    if (paintFrameRaf) {
+      cancelAnimationFrame(paintFrameRaf);
+      paintFrameRaf = 0;
+    }
+    paintAtClientImpl(clientX, clientY);
+    return;
+  }
+  pendingPaintX = clientX;
+  pendingPaintY = clientY;
+  if (!paintFrameRaf) {
+    paintFrameRaf = requestAnimationFrame(() => {
+      paintFrameRaf = 0;
+      if (pendingPaintX == null || pendingPaintY == null) return;
+      const x = pendingPaintX;
+      const y = pendingPaintY;
+      pendingPaintX = null;
+      pendingPaintY = null;
+      paintAtClientImpl(x, y);
+    });
+  }
+}
+
+function onPaintPointerDown(e: PointerEvent): void {
+  if (!props.sprayPaintMode || props.sprayPaintRegionId == null) return;
+  if (e.button !== 0) return;
+  e.preventDefault();
+  isPainting = true;
+  if (controls) controls.enabled = false;
+  renderer?.domElement.setPointerCapture(e.pointerId);
+  paintAtClient(e.clientX, e.clientY, true);
+}
+
+function onPaintPointerMove(e: PointerEvent): void {
+  if (!isPainting || !props.sprayPaintMode) return;
+  e.preventDefault();
+  paintAtClient(e.clientX, e.clientY);
+}
+
+function onPaintPointerUp(e: PointerEvent): void {
+  if (!isPainting) return;
+  isPainting = false;
+  if (renderer?.domElement.hasPointerCapture(e.pointerId)) {
+    renderer.domElement.releasePointerCapture(e.pointerId);
+  }
+  if (controls) controls.enabled = !props.sprayPaintMode;
+  if (pendingPaintX != null && pendingPaintY != null) {
+    if (paintFrameRaf) {
+      cancelAnimationFrame(paintFrameRaf);
+      paintFrameRaf = 0;
+    }
+    paintAtClientImpl(pendingPaintX, pendingPaintY);
+    pendingPaintX = null;
+    pendingPaintY = null;
+  }
+  endPaintStroke();
+}
+
+function detachPaintListeners(): void {
+  if (!paintCanvas) return;
+  paintCanvas.removeEventListener("pointerdown", onPaintPointerDown);
+  paintCanvas.removeEventListener("pointermove", onPaintPointerMove);
+  paintCanvas.removeEventListener("pointerup", onPaintPointerUp);
+  paintCanvas.removeEventListener("pointerleave", onPaintPointerUp);
+  paintCanvas = null;
 }
 
 function disposeThree(): void {
+  detachPaintListeners();
+  if (paintFrameRaf) {
+    cancelAnimationFrame(paintFrameRaf);
+    paintFrameRaf = 0;
+  }
+  pendingPaintX = null;
+  pendingPaintY = null;
   cancelAnimationFrame(animationId);
   animationId = 0;
   rebuildToken++;
@@ -328,14 +641,20 @@ function disposeThree(): void {
     disposeMeshGeometries(terrainRoot);
     terrainRoot.clear();
   }
+  if (maskRoot) {
+    disposeMeshGeometries(maskRoot);
+    disposeObjectMaterials(maskRoot);
+    maskRoot.clear();
+  }
   if (overlayRoot) {
     disposeMeshGeometries(overlayRoot);
     overlayRoot.clear();
   }
   trayRoot = null;
   terrainRoot = null;
+  maskRoot = null;
   overlayRoot = null;
-  disposeSatelliteTexture();
+  terrainMeshRef = null;
   terrainMaterial?.dispose();
   terrainMaterial = null;
   trayMaterial?.dispose();
@@ -347,6 +666,74 @@ function disposeThree(): void {
   scene = null;
   camera = null;
 }
+
+watch(
+  () => [props.sprayMasks, props.sprayPlan?.colors] as const,
+  () => {
+    if (!maskRoot || !props.result?.crop) return;
+    const assemblyOffsetZ = computeTerrainAssemblyOffsetZMm(config.value);
+    rebuildMaskMeshes(assemblyOffsetZ);
+  },
+  { deep: true },
+);
+
+watch(
+  () => props.sprayUiState,
+  () => {
+    applyMaskViewState();
+  },
+  { deep: true },
+);
+
+watch(
+  () => props.sprayPaintMode,
+  (on) => {
+    if (controls) {
+      controls.enabled = !on;
+      controls.autoRotate = !on;
+    }
+  },
+);
+
+watch(
+  () => props.sprayPlan?.colors,
+  () => {
+    if (
+      !terrainMeshRef ||
+      !props.result?.crop ||
+      !props.result.heightPreview ||
+      !props.sprayEnabled ||
+      !props.sprayPlan
+    ) {
+      return;
+    }
+    applySprayColorsToTerrain(
+      terrainMeshRef,
+      props.result.crop,
+      props.result.heightPreview,
+    );
+  },
+  { deep: true },
+);
+
+watch(
+  () => [props.sprayEnabled, props.sprayPlan, props.sprayPlan?.colors] as const,
+  () => {
+    if (!terrainMeshRef || !props.result?.crop || !props.result.heightPreview) {
+      return;
+    }
+    if (props.sprayEnabled && props.sprayPlan) {
+      applySprayColorsToTerrain(
+        terrainMeshRef,
+        props.result.crop,
+        props.result.heightPreview,
+      );
+    } else {
+      resetTerrainMaterial(terrainMeshRef);
+    }
+  },
+  { deep: true },
+);
 
 watch(
   () => props.result,
@@ -378,11 +765,31 @@ onUnmounted(() => {
   disposeThree();
 });
 
-defineExpose({ imageryLoading, sceneBuilding });
+function refreshSprayColors(): void {
+  if (
+    !terrainMeshRef ||
+    !props.result?.crop ||
+    !props.result.heightPreview ||
+    !props.sprayEnabled ||
+    !props.sprayPlan
+  ) {
+    return;
+  }
+  applySprayColorsToTerrain(
+    terrainMeshRef,
+    props.result.crop,
+    props.result.heightPreview,
+  );
+}
+
+defineExpose({ imageryLoading, sceneBuilding, refreshSprayColors });
 </script>
 
 <template>
-  <div class="terrain-preview">
+  <div
+    class="terrain-preview"
+    :class="{ 'terrain-preview--paint': sprayPaintMode }"
+  >
     <div ref="containerRef" class="terrain-preview__viewport" />
     <div
       v-if="!overlayLoading && imageryLoading"
@@ -439,6 +846,14 @@ defineExpose({ imageryLoading, sceneBuilding });
   position: absolute;
   inset: 0;
   z-index: 2;
+}
+
+.terrain-preview--paint .terrain-preview__viewport {
+  cursor: crosshair;
+}
+
+.terrain-preview--paint .terrain-preview__viewport :deep(canvas) {
+  cursor: crosshair;
 }
 
 .terrain-preview__viewport {
