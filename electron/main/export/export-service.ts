@@ -131,7 +131,11 @@ export async function generateModelsZip(
     });
   }
 
-  const trayRes = await generateTrayBase({ config });
+  const trayRes = await generateTrayBase({
+    config,
+    viewportWidth,
+    viewportHeight,
+  });
 
   const trailPoints = config.gpx.points.length || config.gpx.rawPoints.length;
   const trailPolylinePts = terrainWithGroove.trailPolylineMm?.length ?? 0;

@@ -1,6 +1,7 @@
 import { ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useConfigStore } from "@/stores/config";
+import { useUiStore } from "@/stores/ui";
 import { ipcGenerateTray, formatIpcError } from "@/ipc/client";
 import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
@@ -12,7 +13,9 @@ const DEBOUNCE_MS = 400;
 
 export function useTrayGeneration() {
   const configStore = useConfigStore();
+  const ui = useUiStore();
   const { config } = storeToRefs(configStore);
+  const { previewViewport } = storeToRefs(ui);
 
   const generating = ref(false);
   const error = ref<string | null>(null);
@@ -56,6 +59,8 @@ export function useTrayGeneration() {
 
       const res = await ipcGenerateTray({
         config: snapshot,
+        viewportWidth: previewViewport.value.w,
+        viewportHeight: previewViewport.value.h,
       });
       if (id !== requestId) return;
       mesh.value = res.mesh;
@@ -81,6 +86,19 @@ export function useTrayGeneration() {
       config.value.tray.totalThicknessMm,
       config.value.tray.recessDepthMm,
       config.value.tray.rimWidthMm,
+      config.value.tray.nfc.enabled,
+      config.value.tray.nfc.wallClearanceMm,
+      config.value.tray.nfc.recessDepthMm,
+      config.value.tray.nfc.ledExtraRecessDepthMm,
+      config.value.tray.nfc.ledPocketLengthMm,
+      config.value.tray.nfc.ledPocketWidthMm,
+      config.value.gpx.points.length,
+      config.value.gpx.rawPoints.length,
+      config.value.trail.gpxSimplify,
+      config.value.mapCrop.mapCenterLat,
+      config.value.mapCrop.mapCenterLon,
+      config.value.mapCrop.mapZoom,
+      config.value.mapCrop.mapBearingDeg,
       config.value.mapCrop.shape,
       config.value.mapCrop.radiusMm,
       config.value.mapCrop.lengthMm,
@@ -93,6 +111,8 @@ export function useTrayGeneration() {
       config.value.assembly.magnet.thicknessMm,
       config.value.assembly.magnet.toleranceMm,
       config.value.assembly.magnet.circleCount,
+      previewViewport.value.w,
+      previewViewport.value.h,
     ],
     () => scheduleGeneration(),
     { immediate: true },

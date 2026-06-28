@@ -6,6 +6,8 @@ export type TrayMeshPayload = TerrainMeshPayload;
 
 export interface TrayGenerateRequest {
   config: AppConfig;
+  viewportWidth?: number;
+  viewportHeight?: number;
 }
 
 export interface TrayGenerateResponse {

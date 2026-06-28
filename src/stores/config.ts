@@ -54,6 +54,21 @@ function ensureMagnetConfigDefaults(cfg: AppConfig): void {
   }
 }
 
+function ensureTrayNfcDefaults(cfg: AppConfig): void {
+  const tray = cfg.tray as AppConfig["tray"] & { nfc?: AppConfig["tray"]["nfc"] };
+  if (!tray.nfc) {
+    tray.nfc = createDefaultConfig().tray.nfc;
+    return;
+  }
+  const defaults = createDefaultConfig().tray.nfc;
+  if (tray.nfc.ledPocketLengthMm == null) {
+    tray.nfc.ledPocketLengthMm = defaults.ledPocketLengthMm;
+  }
+  if (tray.nfc.ledPocketWidthMm == null) {
+    tray.nfc.ledPocketWidthMm = defaults.ledPocketWidthMm;
+  }
+}
+
 function ensureSprayPaintDefaults(cfg: AppConfig): void {
   if (!cfg.sprayPaint) {
     cfg.sprayPaint = createDefaultConfig().sprayPaint;
@@ -65,6 +80,7 @@ export const useConfigStore = defineStore("config", () => {
   applyOpenTopoApiKey(config.value);
   ensureTrailConfigDefaults(config.value);
   ensureMagnetConfigDefaults(config.value);
+  ensureTrayNfcDefaults(config.value);
   ensureSprayPaintDefaults(config.value);
 
   watch(
@@ -85,6 +101,7 @@ export const useConfigStore = defineStore("config", () => {
     applyOpenTopoApiKey(config.value);
     ensureTrailConfigDefaults(config.value);
     ensureMagnetConfigDefaults(config.value);
+    ensureTrayNfcDefaults(config.value);
     ensureSprayPaintDefaults(config.value);
   }
 

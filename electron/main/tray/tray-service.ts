@@ -12,7 +12,11 @@ import {
 import { IpcException } from "@shared/ipc/types";
 import { magnetCutDimensionsMm } from "@shared/utils/magnet-hole-geometry";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
+import { computeTrayNfcLayout } from "@shared/utils/tray-nfc-layout";
+import type { TrayNfcMeshSpec } from "../assembly/tray-top-nfc-features";
 import { buildTrayBaseMeshForExport } from "./tray-export-mesh";
+
+const DEFAULT_VIEWPORT = { w: 800, h: 600 };
 
 export async function generateTrayBase(
   req: TrayGenerateRequest,
@@ -30,6 +34,9 @@ export async function generateTrayBase(
       validation.message ?? "托盘参数无效",
     );
   }
+
+  const viewportWidth = req.viewportWidth ?? DEFAULT_VIEWPORT.w;
+  const viewportHeight = req.viewportHeight ?? DEFAULT_VIEWPORT.h;
 
   const footprint = computeTrayFootprint(config);
 
@@ -55,6 +62,33 @@ export async function generateTrayBase(
     ? magnetCutDimensionsMm(config.assembly.magnet)
     : null;
 
+  let nfcMesh: TrayNfcMeshSpec | undefined;
+  if (config.tray.nfc.enabled) {
+    const nfcLayout = computeTrayNfcLayout(
+      config,
+      footprint,
+      viewportWidth,
+      viewportHeight,
+    );
+    if (!nfcLayout.cavity) {
+      throw new IpcException(
+        "TRAY_NFC_INVALID",
+        "NFC 容纳腔过小，请减小距内壁距离或增大打印尺寸",
+      );
+    }
+    const floorZ =
+      config.tray.totalThicknessMm - config.tray.recessDepthMm;
+    nfcMesh = {
+      cavityVerts: nfcLayout.cavity.verts,
+      recessDepthMm: config.tray.nfc.recessDepthMm,
+      ledPockets: nfcLayout.ledPockets,
+      ledExtraRecessDepthMm: config.tray.nfc.ledExtraRecessDepthMm,
+      ledPocketLengthMm: config.tray.nfc.ledPocketLengthMm,
+      ledPocketWidthMm: config.tray.nfc.ledPocketWidthMm,
+      floorZ,
+    };
+  }
+
   const mesh = buildTrayBaseMeshForExport(
     footprint,
     config.tray,
@@ -65,6 +99,7 @@ export async function generateTrayBase(
           depthMm: magnetCut.depthMm,
         }
       : undefined,
+    nfcMesh,
   );
 
   if (config.assembly.magnet.enabled) {

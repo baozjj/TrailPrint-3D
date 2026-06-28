@@ -74,10 +74,26 @@ export interface TrailConfig {
 
 // ─── 模块四：托盘底座 ─────────────────────────────────────────────────
 
+/** 底座内嵌 NFC 芯片与 0805 LED 指示结构 */
+export interface TrayNfcConfig {
+  enabled: boolean;
+  /** 距打印轮廓内壁的距离 (mm) */
+  wallClearanceMm: number;
+  /** NFC 区域下沉深度 (mm) */
+  recessDepthMm: number;
+  /** LED 安装区域额外下沉深度 (mm) */
+  ledExtraRecessDepthMm: number;
+  /** LED 安装腔长度 (mm)，沿轨迹方向 */
+  ledPocketLengthMm: number;
+  /** LED 安装腔宽度 (mm) */
+  ledPocketWidthMm: number;
+}
+
 export interface TrayConfig {
   totalThicknessMm: number;
   recessDepthMm: number;
   rimWidthMm: number;
+  nfc: TrayNfcConfig;
 }
 
 // ─── 模块五：打印装配与磁铁 ───────────────────────────────────────────
@@ -168,7 +184,7 @@ export function createDefaultConfig(): AppConfig {
       lengthMm: 120,
       widthMm: 80,
       polygonSides: 6,
-      polygonSideLengthMm: 40,
+      polygonSideLengthMm: 45,
       mapCenterLat: 0,
       mapCenterLon: 0,
       mapZoom: 12,
@@ -192,7 +208,15 @@ export function createDefaultConfig(): AppConfig {
     tray: {
       totalThicknessMm: 5,
       recessDepthMm: 2,
-      rimWidthMm: 8,
+      rimWidthMm: 9,
+      nfc: {
+        enabled: false,
+        wallClearanceMm: 1,
+        recessDepthMm: 0.5,
+        ledExtraRecessDepthMm: 0.8,
+        ledPocketLengthMm: 4,
+        ledPocketWidthMm: 2.5,
+      },
     },
     assembly: {
       trailToleranceMm: 0.15,
