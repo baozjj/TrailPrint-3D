@@ -121,6 +121,33 @@ const trayError = computed(() => {
         <p class="field-hint">
           在 NFC 槽深度之上，LED 位再向下加深，确保灯珠低于顶面、可正常发光。
         </p>
+
+        <p class="group-title">装配盖片</p>
+        <p class="field-hint">
+          装入 NFC 与 LED 后，将盖片压在凹槽顶面：外轮廓与山体打印区一致，仅轨迹起终点开孔漏光。
+        </p>
+        <NumberField
+          v-model="config.tray.nfc.coverThicknessMm"
+          label="盖片厚度"
+          suffix="mm"
+          :min="0.1"
+          :max="3"
+          :step="0.05"
+        />
+        <p class="field-hint">
+          导出 ZIP 时附带 Tray_Cover.stl。默认 0.2mm，可按打印机精度微调。
+        </p>
+        <NumberField
+          v-model="config.tray.nfc.coverInsetMm"
+          label="盖片内缩"
+          suffix="mm"
+          :min="0"
+          :max="5"
+          :step="0.1"
+        />
+        <p class="field-hint">
+          盖片外轮廓相对山体打印区向内缩的距离（同形、同圆心），默认 0.2mm，便于嵌入凹槽顶面。
+        </p>
       </template>
     </div>
 

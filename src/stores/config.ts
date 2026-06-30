@@ -67,6 +67,12 @@ function ensureTrayNfcDefaults(cfg: AppConfig): void {
   if (tray.nfc.ledPocketWidthMm == null) {
     tray.nfc.ledPocketWidthMm = defaults.ledPocketWidthMm;
   }
+  if (tray.nfc.coverThicknessMm == null) {
+    tray.nfc.coverThicknessMm = defaults.coverThicknessMm;
+  }
+  if (tray.nfc.coverInsetMm == null) {
+    tray.nfc.coverInsetMm = defaults.coverInsetMm;
+  }
 }
 
 function ensureSprayPaintDefaults(cfg: AppConfig): void {

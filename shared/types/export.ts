@@ -5,6 +5,7 @@ export const STL_FILE_NAMES = {
   terrainMain: "Terrain_Main.stl",
   trailLine: "Trail_Line.stl",
   trayBase: "Tray_Base.stl",
+  trayCover: "Tray_Cover.stl",
 } as const;
 
 export type ExportPhase =

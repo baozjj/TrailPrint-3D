@@ -5,6 +5,7 @@ import {
   computeTerrainPrintPolygon,
   computeTrayNfcCavityPolygon,
   computeTrayNfcLayout,
+  dedupeOverlappingLedPockets,
   insetTerrainPrintPolygon,
   LED_POCKET_DEFAULT_LENGTH_MM,
   LED_POCKET_DEFAULT_WIDTH_MM,
@@ -69,6 +70,28 @@ function testLedPocketDimensions(): void {
   assert.equal(rect.halfH, 1.25);
 }
 
+function testDedupeLoopLedPockets(): void {
+  const merged = dedupeOverlappingLedPockets(
+    [
+      { cx: 10, cy: 10, angleRad: 0 },
+      { cx: 10.5, cy: 10.2, angleRad: Math.PI },
+    ],
+    4,
+    2.5,
+  );
+  assert.equal(merged.length, 1);
+
+  const separate = dedupeOverlappingLedPockets(
+    [
+      { cx: 0, cy: 0, angleRad: 0 },
+      { cx: 20, cy: 0, angleRad: 0 },
+    ],
+    4,
+    2.5,
+  );
+  assert.equal(separate.length, 2);
+}
+
 function testNfcLayoutDisabled(): void {
   const config = createDefaultConfig();
   const footprint = computeTrayFootprint(config);
@@ -81,5 +104,6 @@ testHexagonInset();
 testNfcCavitySameShape();
 testNfcValidationDepth();
 testLedPocketDimensions();
+testDedupeLoopLedPockets();
 testNfcLayoutDisabled();
 console.log("tray-nfc-layout tests passed");

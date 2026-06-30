@@ -154,6 +154,7 @@ export function applyTrayTopNfcFeatures(
   const ledInsideNfc: Rect2D[] = [];
   const ledOutsideNfc: Rect2D[] = [];
   const floorHoles: Vec2[][] = [nfc.cavityVerts];
+  const seenOutsideHole = new Set<string>();
 
   for (const led of nfc.ledPockets) {
     const rect = ledPocketRect(
@@ -165,7 +166,11 @@ export function applyTrayTopNfcFeatures(
       ledInsideNfc.push(rect);
     } else {
       ledOutsideNfc.push(rect);
-      floorHoles.push(rectCorners(rect));
+      const key = `${Math.round(rect.cx * 100)},${Math.round(rect.cy * 100)}`;
+      if (!seenOutsideHole.has(key)) {
+        seenOutsideHole.add(key);
+        floorHoles.push(rectCorners(rect));
+      }
     }
   }
 

@@ -3,7 +3,8 @@ import { computeTrayFootprint } from "../shared/utils/tray-footprint";
 import { buildTrayBaseMeshForExport } from "../electron/main/tray/tray-export-mesh";
 import { computeTrayBottomMagnetHoles } from "../shared/utils/magnet-hole-layout";
 import { magnetCutDimensionsMm } from "../shared/utils/magnet-hole-geometry";
-import { computeTrayNfcLayout } from "../shared/utils/tray-nfc-layout";
+import { computeTrayNfcLayout, computeTrayCoverPolygon, computeTerrainPrintPolygon } from "../shared/utils/tray-nfc-layout";
+import { buildTrayCoverMesh } from "../electron/main/tray/tray-cover-mesh";
 import {
   bottomPlateCoversPoint,
   countBottomHoleOpenings,
@@ -44,6 +45,26 @@ assert("nfc cavity exists", nfcLayout.cavity != null);
 assert("nfc is hexagon", nfcLayout.cavity!.verts.length === 6);
 assert("led pockets count", nfcLayout.ledPockets.length === 2);
 
+// 环线：起终点重合时只保留一个 LED 槽
+const loopCfg = createDefaultConfig();
+loopCfg.assembly.magnet.enabled = false;
+loopCfg.tray.nfc.enabled = true;
+loopCfg.mapCrop.shape = "polygon";
+loopCfg.mapCrop.polygonSides = 6;
+loopCfg.mapCrop.polygonSideLengthMm = 45;
+loopCfg.gpx.imported = true;
+loopCfg.gpx.points = [
+  { lat: 30.0, lon: 120.0 },
+  { lat: 30.01, lon: 120.01 },
+  { lat: 30.02, lon: 120.02 },
+  { lat: 30.0, lon: 120.0 },
+];
+loopCfg.gpx.rawPoints = loopCfg.gpx.points;
+loopCfg.mapCrop.mapCenterLat = 30.01;
+loopCfg.mapCrop.mapCenterLon = 120.01;
+const loopLayout = computeTrayNfcLayout(loopCfg, footprint, 800, 600);
+assert("loop trail single led", loopLayout.ledPockets.length === 1);
+
 const mesh = buildTrayBaseMeshForExport(
   footprint,
   cfg.tray,
@@ -69,7 +90,41 @@ assert("bottom still closed", bottomPlateCoversPoint(mesh, 0, 0));
 assert("no non-manifold edges", analysis.nonManifoldEdges === 0);
 assert("watertight mesh", analysis.boundaryEdges === 0);
 
+const loopMesh = buildTrayBaseMeshForExport(
+  footprint,
+  loopCfg.tray,
+  undefined,
+  {
+    cavityVerts: loopLayout.cavity!.verts,
+    recessDepthMm: loopCfg.tray.nfc.recessDepthMm,
+    ledPockets: loopLayout.ledPockets,
+    ledExtraRecessDepthMm: loopCfg.tray.nfc.ledExtraRecessDepthMm,
+    ledPocketLengthMm: loopCfg.tray.nfc.ledPocketLengthMm,
+    ledPocketWidthMm: loopCfg.tray.nfc.ledPocketWidthMm,
+    floorZ,
+  },
+);
+assert("loop tray watertight", analyzeMesh(loopMesh).boundaryEdges === 0);
+
 console.log(
   `nfc-top+magnet mesh: ${analysis.vertices} verts, ${analysis.triangles} tris`,
 );
+
+const coverVerts = computeTrayCoverPolygon(cfg, cfg.tray.nfc.coverInsetMm)!;
+const coverMesh = buildTrayCoverMesh({
+  outerVerts: coverVerts,
+  ledPockets: nfcLayout.ledPockets,
+  ledPocketLengthMm: cfg.tray.nfc.ledPocketLengthMm,
+  ledPocketWidthMm: cfg.tray.nfc.ledPocketWidthMm,
+  thicknessMm: cfg.tray.nfc.coverThicknessMm,
+});
+const coverAnalysis = analyzeMesh(coverMesh);
+assert("cover hex outline", coverVerts.length === 6);
+assert("cover smaller than print", coverVerts[0]!.x < computeTerrainPrintPolygon(cfg).verts[0]!.x);
+assert("cover watertight", coverAnalysis.boundaryEdges === 0);
+assert(
+  "cover thickness",
+  Math.abs(coverMesh.minSurfaceZ - cfg.tray.nfc.coverThicknessMm) < 0.01,
+);
+console.log(`cover mesh: ${coverAnalysis.vertices} verts, ${coverAnalysis.triangles} tris`);
 console.log("debug-nfc-cuts passed");

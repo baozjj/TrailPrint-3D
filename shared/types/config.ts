@@ -87,6 +87,10 @@ export interface TrayNfcConfig {
   ledPocketLengthMm: number;
   /** LED 安装腔宽度 (mm) */
   ledPocketWidthMm: number;
+  /** 装配盖片厚度 (mm)，与打印轮廓同形、LED 位开孔 */
+  coverThicknessMm: number;
+  /** 盖片外轮廓相对打印区的向内缩 (mm)，便于嵌入凹槽 */
+  coverInsetMm: number;
 }
 
 export interface TrayConfig {
@@ -216,6 +220,8 @@ export function createDefaultConfig(): AppConfig {
         ledExtraRecessDepthMm: 0.8,
         ledPocketLengthMm: 4,
         ledPocketWidthMm: 2.5,
+        coverThicknessMm: 0.2,
+        coverInsetMm: 0.2,
       },
     },
     assembly: {

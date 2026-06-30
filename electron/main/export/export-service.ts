@@ -18,10 +18,16 @@ import {
   magnetDebugSummary,
 } from "@shared/utils/magnet-debug-log";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
+import {
+  computeTerrainPrintPolygon,
+  computeTrayCoverPolygon,
+  computeTrayNfcLayout,
+} from "@shared/utils/tray-nfc-layout";
 import { IpcException } from "@shared/ipc/types";
 import { hydrateGpxConfig } from "../gpx/hydrate-gpx-config";
 import { generateTerrainMain } from "../terrain/terrain-main-service";
 import { generateTrayBase } from "../tray/tray-service";
+import { buildTrayCoverMesh } from "../tray/tray-cover-mesh";
 import { assertTrailLineMesh, assertWatertightMesh } from "@shared/utils/mesh-manifold";
 import { writeBinaryStl } from "./stl-writer";
 import { packZip, type ZipEntry } from "./zip-packager";
@@ -179,6 +185,36 @@ export async function generateModelsZip(
       { name: STL_FILE_NAMES.trailLine, filePath: trailStl },
       { name: STL_FILE_NAMES.trayBase, filePath: trayStl },
     ];
+
+    if (config.tray.nfc.enabled) {
+      const nfcLayout = computeTrayNfcLayout(
+        config,
+        trayFootprint,
+        viewportWidth,
+        viewportHeight,
+      );
+      const coverVerts = computeTrayCoverPolygon(
+        config,
+        config.tray.nfc.coverInsetMm,
+      );
+      if (!coverVerts) {
+        throw new IpcException(
+          "TRAY_COVER_INVALID",
+          "盖片内缩过大，请减小内缩距离或增大打印尺寸",
+        );
+      }
+      const coverMesh = buildTrayCoverMesh({
+        outerVerts: coverVerts,
+        ledPockets: nfcLayout.ledPockets,
+        ledPocketLengthMm: config.tray.nfc.ledPocketLengthMm,
+        ledPocketWidthMm: config.tray.nfc.ledPocketWidthMm,
+        thicknessMm: config.tray.nfc.coverThicknessMm,
+      });
+      assertWatertightMesh(coverMesh, "Tray_Cover");
+      const coverStl = join(workDir, STL_FILE_NAMES.trayCover);
+      await writeBinaryStl(coverStl, coverMesh, "Tray_Cover");
+      zipEntries.push({ name: STL_FILE_NAMES.trayCover, filePath: coverStl });
+    }
 
     if (config.sprayPaint.enabled) {
       if (!terrainWithGroove.heightPreview || !terrainWithGroove.crop) {

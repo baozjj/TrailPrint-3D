@@ -1,5 +1,6 @@
 import type { AppConfig, TrayConfig } from "../types/config";
 import type { TrayValidationResult } from "../types/tray";
+import { computeTrayCoverPolygon } from "./tray-nfc-layout";
 
 const MIN_BOTTOM_FLOOR_MM = 0.3;
 
@@ -37,6 +38,12 @@ export function validateTrayConfig(tray: TrayConfig): TrayValidationResult {
     if (nfc.ledPocketWidthMm <= 0) {
       return { valid: false, message: "LED 安装腔宽度必须大于 0" };
     }
+    if (nfc.coverThicknessMm <= 0) {
+      return { valid: false, message: "盖片厚度必须大于 0" };
+    }
+    if (nfc.coverInsetMm < 0) {
+      return { valid: false, message: "盖片内缩距离不能为负" };
+    }
     const bottomSolidMm = tray.totalThicknessMm - tray.recessDepthMm;
     const maxLedDepth = bottomSolidMm - MIN_BOTTOM_FLOOR_MM;
     const maxNfcDepth = maxLedDepth - nfc.ledExtraRecessDepthMm;
@@ -60,5 +67,21 @@ export function validateTrayConfig(tray: TrayConfig): TrayValidationResult {
 export function validateTrayFromAppConfig(
   config: AppConfig,
 ): TrayValidationResult {
-  return validateTrayConfig(config.tray);
+  const base = validateTrayConfig(config.tray);
+  if (!base.valid) return base;
+
+  if (config.tray.nfc.enabled && config.tray.nfc.coverInsetMm > 0) {
+    const outline = computeTrayCoverPolygon(
+      config,
+      config.tray.nfc.coverInsetMm,
+    );
+    if (!outline) {
+      return {
+        valid: false,
+        message: "盖片内缩过大，请减小内缩距离或增大打印尺寸",
+      };
+    }
+  }
+
+  return { valid: true };
 }

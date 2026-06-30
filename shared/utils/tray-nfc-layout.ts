@@ -130,6 +130,16 @@ export function insetTerrainPrintPolygon(
   return scaleVerts(verts, newR / R);
 }
 
+/** 盖片外轮廓：打印区同形内缩 coverInsetMm，同圆心 */
+export function computeTrayCoverPolygon(
+  config: AppConfig,
+  coverInsetMm: number,
+): Vec2[] | null {
+  const print = computeTerrainPrintPolygon(config);
+  if (coverInsetMm <= 0) return print.verts;
+  return insetTerrainPrintPolygon(print, coverInsetMm);
+}
+
 export function computeTrayNfcCavityPolygon(
   config: AppConfig,
   _footprint: TrayFootprint,
@@ -146,6 +156,34 @@ function angleFromPoints(
   to: { x: number; y: number },
 ): number {
   return Math.atan2(to.y - from.y, to.x - from.x);
+}
+
+function averageAngleRad(a: number, b: number): number {
+  return Math.atan2(Math.sin(a) + Math.sin(b), Math.cos(a) + Math.cos(b));
+}
+
+/**
+ * 环线或起终点重合时合并为单孔，避免重复铣槽导致网格开放边。
+ */
+export function dedupeOverlappingLedPockets(
+  pockets: LedPocketSpec[],
+  lengthMm: number,
+  widthMm: number,
+): LedPocketSpec[] {
+  if (pockets.length < 2) return pockets;
+  const a = pockets[0]!;
+  const b = pockets[1]!;
+  const mergeDistMm = Math.max(lengthMm, widthMm);
+  if (Math.hypot(a.cx - b.cx, a.cy - b.cy) > mergeDistMm) {
+    return pockets;
+  }
+  return [
+    {
+      cx: (a.cx + b.cx) / 2,
+      cy: (a.cy + b.cy) / 2,
+      angleRad: averageAngleRad(a.angleRad, b.angleRad),
+    },
+  ];
 }
 
 /** 轨迹起点与终点处的 0805 LED 安装位（模型平面 mm） */
@@ -171,7 +209,7 @@ export function computeTrayNfcLedPockets(
 
   const start = polyline[0]!;
   const end = polyline[polyline.length - 1]!;
-  return [
+  const pockets: LedPocketSpec[] = [
     {
       cx: start.x,
       cy: start.y,
@@ -183,6 +221,11 @@ export function computeTrayNfcLedPockets(
       angleRad: angleFromPoints(polyline[polyline.length - 2]!, end),
     },
   ];
+  return dedupeOverlappingLedPockets(
+    pockets,
+    config.tray.nfc.ledPocketLengthMm,
+    config.tray.nfc.ledPocketWidthMm,
+  );
 }
 
 export function computeTrayNfcLayout(
