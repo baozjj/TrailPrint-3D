@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { useUiStore } from '@/stores/ui'
 import { trayMagnetHoleCount } from '@shared/utils/magnet-hole-layout'
+import { validateAssemblySection } from '@shared/utils/model-validation'
 import { computeTrayFootprint } from '@shared/utils/tray-footprint'
 import AccordionSection from '@/components/ui/AccordionSection.vue'
 import IosToggle from '@/components/ui/IosToggle.vue'
@@ -33,6 +34,11 @@ const showCircleMagnetCount = computed(
     config.value.assembly.magnet.enabled &&
     trayFootprint.value.shape === 'circle',
 )
+
+const assemblyError = computed(() => {
+  const v = validateAssemblySection(config.value)
+  return v.valid ? null : v.message
+})
 </script>
 
 <template>
@@ -109,6 +115,7 @@ const showCircleMagnetCount = computed(
       />
       <p class="hint">{{ magnetHoleCountHint }}</p>
     </template>
+    <p v-if="assemblyError" class="error">{{ assemblyError }}</p>
   </AccordionSection>
 </template>
 
@@ -135,5 +142,12 @@ const showCircleMagnetCount = computed(
   font-size: 12px;
   color: var(--tp-text-secondary);
   margin: 0;
+}
+
+.error {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #e5484d;
 }
 </style>

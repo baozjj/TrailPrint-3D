@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useConfigStore } from "@/stores/config";
 import { useUiStore } from "@/stores/ui";
-import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { validateTraySection } from "@shared/utils/model-validation";
 import AccordionSection from "@/components/ui/AccordionSection.vue";
 import NumberField from "@/components/ui/NumberField.vue";
 import IosToggle from "@/components/ui/IosToggle.vue";
@@ -14,7 +14,10 @@ const { config } = storeToRefs(configStore);
 const { openSections } = storeToRefs(ui);
 
 const trayError = computed(() => {
-  const v = validateTrayFromAppConfig(config.value);
+  const v = validateTraySection(config.value, {
+    width: ui.previewViewport.w,
+    height: ui.previewViewport.h,
+  });
   return v.valid ? null : v.message;
 });
 </script>

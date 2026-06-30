@@ -5,7 +5,7 @@ import { useUiStore } from '@/stores/ui'
 import { useConfigStore } from '@/stores/config'
 import { useGpxImport } from '@/composables/useGpxImport'
 import { formatIpcError, ipcOnExportProgress, ipcRevealExport } from '@/ipc/client'
-import { validateTrayFromAppConfig } from '@shared/utils/tray-validation'
+import { validateModelGeneration } from '@shared/utils/model-validation'
 import GpxImportSummary from '@/components/gpx/GpxImportSummary.vue'
 import OpenTopoApiKeyCard from '@/components/sections/OpenTopoApiKeyCard.vue'
 import TrailPrintLogo from '@/components/ui/TrailPrintLogo.vue'
@@ -70,9 +70,12 @@ function openPreviewModal(): void {
     statusMessage.value = '请先导入 GPX 轨迹文件'
     return
   }
-  const trayCheck = validateTrayFromAppConfig(configStore.config)
-  if (!trayCheck.valid) {
-    statusMessage.value = trayCheck.message ?? '请修正托盘参数'
+  const check = validateModelGeneration(configStore.config, {
+    viewportWidth: ui.previewViewport.w,
+    viewportHeight: ui.previewViewport.h,
+  })
+  if (!check.valid) {
+    statusMessage.value = check.message ?? '请修正参数后重试'
     return
   }
   ui.runPrepareExport()

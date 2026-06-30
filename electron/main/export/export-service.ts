@@ -9,7 +9,7 @@ import {
   type ExportGenerateResponse,
   type ExportProgress,
 } from "@shared/types/export";
-import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import { trailLineWidthMmForPrint } from "@shared/utils/footprint";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
@@ -73,16 +73,20 @@ export async function generateModelsZip(
   if (!config.gpx.imported) {
     throw new IpcException("GPX_REQUIRED", "请先导入 GPX 轨迹文件");
   }
-  if (config.gpx.points.length < 2) {
-    throw new IpcException("GPX_INVALID", "轨迹点数不足，无法生成模型");
+
+  const modelCheck = validateModelGeneration(config, {
+    viewportWidth,
+    viewportHeight,
+  });
+  if (!modelCheck.valid) {
+    throw new IpcException(
+      "MODEL_INVALID",
+      modelCheck.message ?? "参数冲突，无法生成模型",
+    );
   }
 
-  const trayCheck = validateTrayFromAppConfig(config);
-  if (!trayCheck.valid) {
-    throw new IpcException(
-      "TRAY_INVALID",
-      trayCheck.message ?? "托盘参数无效",
-    );
+  if (config.gpx.points.length < 2) {
+    throw new IpcException("GPX_INVALID", "轨迹点数不足，无法生成模型");
   }
 
   if (viewportWidth < 64 || viewportHeight < 64) {

@@ -8,6 +8,7 @@ import type {
 } from "@shared/types/terrain";
 import { computeTerrainCropRegion } from "@shared/utils/crop-region";
 import { IpcException } from "@shared/ipc/types";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import { sampleDemGrid } from "./dem-provider";
 import { applyTerrainSmoothing, fillDemHoles } from "./smoothing";
 import {
@@ -113,6 +114,17 @@ export async function generateTerrainMain(
   reportProgress(onProgress, "prepare", 0.02, "正在准备参数…");
   config = await hydrateGpxConfig(config);
   config = ensureMapZoomFitsTrail(config, viewportWidth, viewportHeight);
+
+  const modelCheck = validateModelGeneration(config, {
+    viewportWidth,
+    viewportHeight,
+  });
+  if (!modelCheck.valid) {
+    throw new IpcException(
+      "MODEL_INVALID",
+      modelCheck.message ?? "参数冲突，无法生成模型",
+    );
+  }
 
   if (viewportWidth < 8 || viewportHeight < 8) {
     throw new IpcException(

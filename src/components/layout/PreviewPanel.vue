@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, toRef, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useUiStore } from "@/stores/ui";
 import { useConfigStore } from "@/stores/config";
@@ -7,6 +7,7 @@ import { useGpxImport } from "@/composables/useGpxImport";
 import { useStlExport } from "@/composables/useStlExport";
 import { useTerrainGeneration } from "@/composables/useTerrainGeneration";
 import { useTrayGeneration } from "@/composables/useTrayGeneration";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import MapLeafletView from "@/components/map/MapLeafletView.vue";
 import TerrainPreviewModal from "@/components/preview/TerrainPreviewModal.vue";
 
@@ -40,7 +41,17 @@ const terrainResult = toRef(terrainGen, "lastResult");
 const terrainGenerating = toRef(terrainGen, "generating");
 const terrainProgress = toRef(terrainGen, "progress");
 const terrainError = toRef(terrainGen, "error");
+const trayError = toRef(trayGen, "error");
 const trayMesh = toRef(trayGen, "mesh");
+
+const previewError = computed(() => {
+  const live = validateModelGeneration(config.value, {
+    viewportWidth: viewport.value.w,
+    viewportHeight: viewport.value.h,
+  });
+  if (!live.valid) return live.message ?? "参数冲突，请检查左侧设置";
+  return terrainError.value ?? trayError.value;
+});
 
 let resizeObserver: ResizeObserver | null = null;
 
@@ -202,7 +213,7 @@ async function onDownloadStl(): Promise<void> {
       :generating="terrainGenerating"
       :terrain-progress="terrainProgress"
       :downloading="exporting"
-      :error="terrainError"
+      :error="previewError"
       @opened="onTerrainModalOpened"
       @download="onDownloadStl"
     />

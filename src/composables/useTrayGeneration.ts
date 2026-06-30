@@ -3,7 +3,7 @@ import { storeToRefs } from "pinia";
 import { useConfigStore } from "@/stores/config";
 import { useUiStore } from "@/stores/ui";
 import { ipcGenerateTray, formatIpcError } from "@/ipc/client";
-import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
 import { logMagnetDebug } from "@shared/utils/magnet-debug-log";
 import { computeTrayFootprint } from "@shared/utils/tray-footprint";
@@ -31,9 +31,13 @@ export function useTrayGeneration() {
       return;
     }
 
-    const validation = validateTrayFromAppConfig(config.value);
+    const validation = validateModelGeneration(config.value, {
+      viewportWidth: previewViewport.value.w,
+      viewportHeight: previewViewport.value.h,
+      requireGpx: true,
+    });
     if (!validation.valid) {
-      error.value = validation.message ?? "托盘参数无效";
+      error.value = validation.message ?? "参数冲突，请检查左侧设置";
       mesh.value = null;
       return;
     }

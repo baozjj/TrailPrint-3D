@@ -11,6 +11,7 @@ import type {
   TerrainGenerateResponse,
   TerrainMeshPayload,
 } from "@shared/types/terrain";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 
 const DEBOUNCE_MS = 450;
 
@@ -46,6 +47,19 @@ export function useTerrainGeneration(
       trailMesh.value = null;
       lastResult.value = null;
       error.value = null;
+      progress.value = null;
+      return;
+    }
+
+    const validation = validateModelGeneration(config.value, {
+      viewportWidth: w,
+      viewportHeight: h,
+    });
+    if (!validation.valid) {
+      error.value = validation.message ?? "参数冲突，请检查左侧设置";
+      mesh.value = null;
+      trailMesh.value = null;
+      lastResult.value = null;
       progress.value = null;
       return;
     }

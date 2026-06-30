@@ -3,7 +3,7 @@ import type {
   TrayGenerateRequest,
   TrayGenerateResponse,
 } from "@shared/types/tray";
-import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
 import {
   logMagnetDebug,
@@ -27,16 +27,20 @@ export async function generateTrayBase(
     throw new IpcException("INVALID_REQUEST", "缺少 config 快照");
   }
 
-  const validation = validateTrayFromAppConfig(config);
+  const viewportWidth = req.viewportWidth ?? DEFAULT_VIEWPORT.w;
+  const viewportHeight = req.viewportHeight ?? DEFAULT_VIEWPORT.h;
+
+  const validation = validateModelGeneration(config, {
+    viewportWidth,
+    viewportHeight,
+    requireGpx: config.gpx.imported,
+  });
   if (!validation.valid) {
     throw new IpcException(
       "TRAY_INVALID",
       validation.message ?? "托盘参数无效",
     );
   }
-
-  const viewportWidth = req.viewportWidth ?? DEFAULT_VIEWPORT.w;
-  const viewportHeight = req.viewportHeight ?? DEFAULT_VIEWPORT.h;
 
   const footprint = computeTrayFootprint(config);
 

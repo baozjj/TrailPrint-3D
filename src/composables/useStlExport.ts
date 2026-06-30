@@ -4,7 +4,7 @@ import { useConfigStore } from "@/stores/config";
 import { formatIpcError, ipcGenerateExport } from "@/ipc/client";
 import { useSpraySegmentation } from "@/composables/useSpraySegmentation";
 import { serializeSprayPlan } from "@/utils/ipc-serialize";
-import { validateTrayFromAppConfig } from "@shared/utils/tray-validation";
+import { validateModelGeneration } from "@shared/utils/model-validation";
 import { physicalFootprintMm } from "@shared/utils/crop-region";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
 import { computeTrayBottomMagnetHoles } from "@shared/utils/magnet-hole-layout";
@@ -27,9 +27,12 @@ export function useStlExport() {
       statusMessage.value = "请先导入 GPX 轨迹文件";
       return;
     }
-    const trayCheck = validateTrayFromAppConfig(configStore.config);
-    if (!trayCheck.valid) {
-      statusMessage.value = trayCheck.message ?? "请修正托盘参数";
+    const check = validateModelGeneration(configStore.config, {
+      viewportWidth: Math.round(ui.previewViewport.w),
+      viewportHeight: Math.round(ui.previewViewport.h),
+    });
+    if (!check.valid) {
+      statusMessage.value = check.message ?? "请修正参数后重试";
       return;
     }
     generating.value = true;

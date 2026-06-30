@@ -1,6 +1,7 @@
 import type { AppConfig, TrayConfig } from "../types/config";
 import type { TrayValidationResult } from "../types/tray";
-import { computeTrayCoverPolygon } from "./tray-nfc-layout";
+import { computeTrayCoverPolygon, computeTrayNfcCavityPolygon } from "./tray-nfc-layout";
+import { computeTrayFootprint } from "./tray-footprint";
 
 const MIN_BOTTOM_FLOOR_MM = 0.3;
 
@@ -69,6 +70,21 @@ export function validateTrayFromAppConfig(
 ): TrayValidationResult {
   const base = validateTrayConfig(config.tray);
   if (!base.valid) return base;
+
+  if (config.tray.nfc.enabled) {
+    const footprint = computeTrayFootprint(config);
+    const cavity = computeTrayNfcCavityPolygon(
+      config,
+      footprint,
+      config.tray.nfc.wallClearanceMm,
+    );
+    if (!cavity) {
+      return {
+        valid: false,
+        message: "NFC 容纳腔过小，请减小「距打印内壁」或增大打印尺寸",
+      };
+    }
+  }
 
   if (config.tray.nfc.enabled && config.tray.nfc.coverInsetMm > 0) {
     const outline = computeTrayCoverPolygon(
