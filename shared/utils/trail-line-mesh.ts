@@ -13,10 +13,10 @@ export interface BuildTrailLineOptions {
   crop: TerrainCropRegion;
   /** 路径重采样步长 (mm)，未指定时按宽度自动 */
   sampleStepMm?: number;
-  /** 顶面相对 heightMm 采样的抬升 (mm)；平底模式下顶面贴合地表并叠加此抬升 */
+  /** 顶面相对 heightMm 采样的抬升 (mm) */
   zTopOffsetMm?: number;
-  /** 平底轨迹/凹槽共用底面 Z (mm)；导出时与主模型槽底一致 */
-  flatFloorZMm?: number;
+  /** 平底槽底 Z (mm)，与主模型凹槽一致，通常为 -depthMm */
+  grooveFloorZMm?: number;
 }
 
 const MIN_SEGMENT_MM = 0.35;
@@ -115,7 +115,7 @@ function triArea2(
 }
 
 /**
- * 沿轨迹挤出封闭带状实体（顶面贴 DEM，向下 depthMm），用于 Trail_Line.stl。
+ * 沿轨迹挤出封闭带状实体（底面贴平底槽，顶面贴地表 + 高出量），用于 Trail_Line.stl。
  * 与主模型凹槽共用折线；失败时自动加大采样步长重试。
  */
 export function buildTrailLineMesh(
@@ -229,33 +229,12 @@ function collectTrailSamples(
   depthMm: number,
 ): TrailSample[] {
   const samples: TrailSample[] = [];
-  const flatFloor = opts.flatFloorZMm;
-  const useFlatFloor =
-    flatFloor != null && Number.isFinite(flatFloor) && depthMm > 0;
   const zOffset = opts.zTopOffsetMm ?? 0;
   const grooveDepthMm = Math.max(0.05, depthMm);
+  const floorZ = opts.grooveFloorZMm ?? -grooveDepthMm;
 
   for (const p of path) {
-    if (useFlatFloor) {
-      const zBot = flatFloor!;
-      const zSurface = sampleHeightBilinearMm(
-        p.x,
-        p.y,
-        heightMm,
-        cols,
-        rows,
-        crop,
-        zBot,
-      );
-      // 顶面贴挖槽前地表 + 高出量；至少填满凹槽深度（floorZ + trailDepth + 高出量）
-      const zTop = Math.max(
-        zSurface + zOffset,
-        zBot + grooveDepthMm + zOffset,
-      );
-      samples.push({ x: p.x, y: p.y, zTop, zBot });
-      continue;
-    }
-    const zBase = sampleHeightBilinearMm(
+    const zSurface = sampleHeightBilinearMm(
       p.x,
       p.y,
       heightMm,
@@ -264,8 +243,9 @@ function collectTrailSamples(
       crop,
       0,
     );
-    const zTop = zBase + zOffset;
-    samples.push({ x: p.x, y: p.y, zTop, zBot: zBase - grooveDepthMm });
+    const zBot = floorZ;
+    const zTop = zSurface + zOffset;
+    samples.push({ x: p.x, y: p.y, zTop, zBot });
   }
   return samples;
 }

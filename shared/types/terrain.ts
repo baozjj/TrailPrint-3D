@@ -51,7 +51,7 @@ export interface TrailGrooveSpec {
   widthMm: number;
   /** 凹槽深度 (mm)，等于轨迹厚度 trailDepthMm */
   depthMm: number;
-  /** 平底凹槽统一底面 Z (mm)；导出时由 computeFlatGrooveFloorZMm 填入 */
+  /** 平底槽底 Z (mm)，通常为 -depthMm（相对 Z=0 基准） */
   floorZMm?: number;
 }
 

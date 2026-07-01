@@ -12,9 +12,11 @@ GPX 点 `(lat, lon)` 映射到与 `Terrain_Main` 相同的模型平面 (mm)：
 
 ## 表面高度 Z
 
-- 轨迹顶面 Z：沿路径在挖槽前地表双线性采样，再加 `trail.heightAboveMainMm`（高出主模型）
-- 轨迹底面 Z：与主模型平底槽同一水平面 `floorZ`
-- 主模型挖槽：走廊内格点统一设为 `floorZ`；`floorZ = 走廊内地表最低点 − trailDepthMm`
+- Z=0：全图最低海拔（基础顶面基准）；基础厚度在 Z=0 以下（如 2 mm 基础 → Z∈[-2,0]）
+- **平底槽底** `floorZ = -trailDepthMm`（如深度 1.5 mm → 槽底 -0.5 mm）；走廊内槽底以上至原地表为空腔
+- 轨迹顶面 Z：沿路径在挖槽前地表双线性采样，再加 `trail.heightAboveMainMm`
+- 轨迹底面 Z：与主模型平底槽相同 `floorZ`
+- 主模型挖槽：走廊内格点统一设为 `floorZ`
 
 ## 装配公差（任务-06）
 

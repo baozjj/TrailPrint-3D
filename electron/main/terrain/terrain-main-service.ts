@@ -25,7 +25,7 @@ import {
   trailLineWidthMmForPrint,
   trailHeightAboveMainMm,
 } from "@shared/utils/footprint";
-import { computeFlatGrooveFloorZMm } from "@shared/utils/trail-groove-floor";
+import { computeGrooveFloorZMm } from "@shared/utils/trail-groove-floor";
 import { ensureMapZoomFitsTrail } from "@shared/utils/trail-fit";
 import {
   metersPerDegreeLat,
@@ -39,7 +39,8 @@ import {
 import type { TerrainMeshQuality } from "@shared/types/config";
 
 /**
- * DEM 海拔 (m) → 模型 Z (mm)，原地写入 elevations，避免高精度下重复分配巨型数组。
+ * DEM 海拔 (m) → 模型 Z 抬升 (mm)，原地写入 elevations。
+ * 全图最低海拔归一为 Z=0（基础顶面基准）；基础厚度在 Z=0 以下。
  */
 function elevationsToHeightMmInPlace(
   elevations: Float64Array,
@@ -192,7 +193,7 @@ export async function generateTerrainMain(
   );
   const heightMm = smoothed;
   const surfaceForTrail = new Float64Array(heightMm);
-  let flatFloorZ: number | null = null;
+  let grooveFloorZ: number | undefined;
   let exportGroove: ReturnType<typeof buildTrailGrooveSpec> = undefined;
 
   if (buildExportMesh) {
@@ -203,24 +204,9 @@ export async function generateTerrainMain(
       viewportHeight,
     );
     if (exportGroove) {
-      flatFloorZ = computeFlatGrooveFloorZMm({
-        polylineMm: exportGroove.polylineMm,
-        widthMm: exportGroove.widthMm,
-        depthMm: exportGroove.depthMm,
-        surfaceMm: surfaceForTrail,
-        cols,
-        rows,
-        crop,
-      });
-      if (flatFloorZ != null) exportGroove.floorZMm = flatFloorZ;
-      applyGrooveToHeightField(
-        heightMm,
-        cols,
-        rows,
-        crop,
-        exportGroove,
-        surfaceForTrail,
-      );
+      grooveFloorZ = computeGrooveFloorZMm(exportGroove.depthMm);
+      exportGroove.floorZMm = grooveFloorZ;
+      applyGrooveToHeightField(heightMm, cols, rows, crop, exportGroove);
     }
   }
 
@@ -237,7 +223,7 @@ export async function generateTerrainMain(
     ? buildHeightfieldTerrainMesh(crop, heightMm, cols, rows, baseThicknessMm)
     : { ...EMPTY_TERRAIN_MESH, gridCols: cols, gridRows: rows };
 
-  if (buildExportMesh) {
+  if (buildExportMesh && exportGroove) {
     mesh = imprintGrooveOnTerrainMesh(mesh, exportGroove);
   }
 
@@ -268,7 +254,7 @@ export async function generateTerrainMain(
       cols,
       rows,
       crop,
-      flatFloorZMm: flatFloorZ ?? undefined,
+      grooveFloorZMm: grooveFloorZ,
       zTopOffsetMm: trailHeightAboveMainMm(config),
       sampleStepMm: Math.max(
         qualitySpec.trailMinStepMm,

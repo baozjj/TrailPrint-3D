@@ -1,5 +1,6 @@
 import type { TerrainMeshPayload } from "../types/terrain";
 import type { TrailGrooveSpec } from "../types/terrain";
+import { computeGrooveFloorZMm } from "./trail-groove-floor";
 import { distanceToPolylineMm, type TrailPointMm } from "./trail-coords";
 
 /**
@@ -10,15 +11,12 @@ export function imprintGrooveOnTerrainMesh(
   mesh: TerrainMeshPayload,
   groove: TrailGrooveSpec | undefined,
 ): TerrainMeshPayload {
-  const floorZ = groove?.floorZMm;
-  if (
-    !groove?.polylineMm?.length ||
-    floorZ == null ||
-    !Number.isFinite(floorZ)
-  ) {
+  if (!groove?.polylineMm?.length || groove.depthMm <= 0) {
     return mesh;
   }
 
+  const floorZ =
+    groove.floorZMm ?? computeGrooveFloorZMm(groove.depthMm);
   const halfW = groove.widthMm / 2;
   const polyline = groove.polylineMm as TrailPointMm[];
   const bottomZ = mesh.bottomZ;

@@ -4,11 +4,11 @@ import {
   distanceToPolylineMm,
   type TrailPointMm,
 } from "@shared/utils/trail-coords";
-import { computeFlatGrooveFloorZMm } from "@shared/utils/trail-groove-floor";
+import { computeGrooveFloorZMm } from "@shared/utils/trail-groove-floor";
 
 /**
- * 在主模型高度场上沿轨迹垂直挖平底槽。
- * 走廊内格点统一为 floorZMm（由走廊内地表最低点 − depth 确定）。
+ * 在主模型高度场上沿轨迹挖平底槽。
+ * 走廊内格点统一为 floorZMm（Z=0 向下 depthMm）；槽底以上至原地表为空腔。
  */
 export function applyGrooveToHeightField(
   heightMm: Float64Array,
@@ -16,24 +16,11 @@ export function applyGrooveToHeightField(
   rows: number,
   crop: TerrainCropRegion,
   groove: TrailGrooveSpec | undefined,
-  surfaceMm?: Float64Array,
 ): void {
   if (!groove?.polylineMm?.length || groove.depthMm <= 0) return;
 
-  const reference = surfaceMm ?? heightMm;
   const floorZ =
-    groove.floorZMm ??
-    computeFlatGrooveFloorZMm({
-      polylineMm: groove.polylineMm as TrailPointMm[],
-      widthMm: groove.widthMm,
-      depthMm: groove.depthMm,
-      surfaceMm: reference,
-      cols,
-      rows,
-      crop,
-    });
-  if (floorZ == null || !Number.isFinite(floorZ)) return;
-
+    groove.floorZMm ?? computeGrooveFloorZMm(groove.depthMm);
   const halfW = groove.widthMm / 2;
   const hw = crop.widthMm / 2;
   const hh = crop.heightMm / 2;
@@ -50,8 +37,7 @@ export function applyGrooveToHeightField(
         groove.polylineMm as TrailPointMm[],
       );
       if (dist <= halfW) {
-        const i = row * cols + col;
-        heightMm[i] = floorZ;
+        heightMm[row * cols + col] = floorZ;
       }
     }
   }
@@ -65,4 +51,4 @@ export function applyTrailGrooveCut(
   return mesh;
 }
 
-export const TRAIL_GROOVE_API_VERSION = 1;
+export const TRAIL_GROOVE_API_VERSION = 3;
