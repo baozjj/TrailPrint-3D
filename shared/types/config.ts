@@ -19,6 +19,8 @@ export interface MapCropConfig {
   /** 正多边形：边数 3–8 影响遮罩形状；边长 (mm) 仅用于 STL */
   polygonSides: number;
   polygonSideLengthMm: number;
+  /** 矩形 / 正多边形外轮廓 R 角 (mm)，0 为直角 */
+  cornerRadiusMm: number;
   /** 地图视窗中心与缩放（地理坐标，供构图与后续 DEM 采样） */
   mapCenterLat: number;
   mapCenterLon: number;
@@ -189,6 +191,7 @@ export function createDefaultConfig(): AppConfig {
       widthMm: 80,
       polygonSides: 6,
       polygonSideLengthMm: 45,
+      cornerRadiusMm: 0,
       mapCenterLat: 0,
       mapCenterLon: 0,
       mapZoom: 12,

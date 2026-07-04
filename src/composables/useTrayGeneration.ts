@@ -109,6 +109,7 @@ export function useTrayGeneration() {
       config.value.mapCrop.widthMm,
       config.value.mapCrop.polygonSides,
       config.value.mapCrop.polygonSideLengthMm,
+      config.value.mapCrop.cornerRadiusMm,
       config.value.assembly.trayToleranceMm,
       config.value.assembly.magnet.enabled,
       config.value.assembly.magnet.diameterMm,

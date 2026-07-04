@@ -9,6 +9,7 @@ import {
   rectangleClipPolygon,
   type Vec2,
 } from "./mesh-clip";
+import { cornerRadiusFromCrop } from "./rounded-footprint";
 
 /** 模型平面 (mm) 双线性采样高度场 */
 export function sampleHeightBilinearMm(
@@ -474,6 +475,16 @@ export function buildHeightfieldTerrainMesh(
     );
   }
   if (crop.shape === "rectangle") {
+    if (cornerRadiusFromCrop(crop) > 1e-6) {
+      return buildPolygonSolidMesh(
+        crop,
+        heightMm,
+        cols,
+        rows,
+        baseThicknessMm,
+        minSurface,
+      );
+    }
     return buildRectGridMesh(
       crop,
       heightMm,

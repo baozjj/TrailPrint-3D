@@ -4,6 +4,7 @@ import {
   maskPolygonPoints,
   type MaskScreenGeometry,
 } from "./mask-geometry";
+import { roundedRectanglePolygon } from "./rounded-footprint";
 
 export interface TrayMaskOverlay {
   /** 托盘最外缘（屏幕像素） */
@@ -39,12 +40,14 @@ function scaleMaskGeometry(
     };
   }
   if (inner.kind === "rect" && inner.hw && inner.hh) {
+    const cornerScale = Math.min(scaleX, scaleY);
     return {
       kind: "rect",
       cx: inner.cx,
       cy: inner.cy,
       hw: inner.hw * scaleX,
       hh: inner.hh * scaleY,
+      cornerR: inner.cornerR ? inner.cornerR * cornerScale : 0,
     };
   }
   if (inner.vertices?.length) {
@@ -103,6 +106,18 @@ export function trayOuterOutlinePath(
     return `M ${m.cx} ${m.cy} m -${r},0 a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 Z`;
   }
   if (m.kind === "rect" && m.hw && m.hh) {
+    const cornerR = m.cornerR ?? 0;
+    if (cornerR > 0.5) {
+      const verts = roundedRectanglePolygon(m.hw, m.hh, cornerR, 6).map((v) => ({
+        x: m.cx + v.x,
+        y: m.cy + v.y,
+      }));
+      return (
+        verts
+          .map((v, i) => (i === 0 ? `M ${v.x} ${v.y}` : `L ${v.x} ${v.y}`))
+          .join(" ") + " Z"
+      );
+    }
     const x1 = m.cx - m.hw;
     const y1 = m.cy - m.hh;
     const x2 = m.cx + m.hw;

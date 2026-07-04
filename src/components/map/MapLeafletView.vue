@@ -57,6 +57,21 @@ function updateMaskLayout(): void {
   maskGeom.value = buildMaskGeometry(config.value.mapCrop, w, h);
 }
 
+function rectBoxStyle(m: MaskScreenGeometry): Record<string, string> | undefined {
+  if (m.kind !== "rect" || !m.hw || !m.hh) return undefined;
+  const style: Record<string, string> = {
+    left: `${m.cx}px`,
+    top: `${m.cy}px`,
+    transform: "translate(-50%, -50%)",
+    width: `${m.hw * 2}px`,
+    height: `${m.hh * 2}px`,
+  };
+  if (m.cornerR && m.cornerR > 0.5) {
+    style.borderRadius = `${m.cornerR}px`;
+  }
+  return style;
+}
+
 const maskHoleStyle = computed(() => {
   const m = maskGeom.value;
   if (!m || m.kind === "polygon") return undefined;
@@ -73,12 +88,8 @@ const maskHoleStyle = computed(() => {
       borderRadius: "50%",
     };
   }
-  if (m.kind === "rect" && m.hw && m.hh) {
-    return {
-      ...base,
-      width: `${m.hw * 2}px`,
-      height: `${m.hh * 2}px`,
-    };
+  if (m.kind === "rect") {
+    return rectBoxStyle(m);
   }
   return undefined;
 });
@@ -121,12 +132,8 @@ const trayOuterStyle = computed(() => {
       borderRadius: "50%",
     };
   }
-  if (m.kind === "rect" && m.hw && m.hh) {
-    return {
-      ...base,
-      width: `${m.hw * 2}px`,
-      height: `${m.hh * 2}px`,
-    };
+  if (m.kind === "rect") {
+    return rectBoxStyle(m);
   }
   return undefined;
 });
@@ -390,7 +397,10 @@ watch(
 watch(
   () => [
     config.value.mapCrop.shape,
+    config.value.mapCrop.lengthMm,
+    config.value.mapCrop.widthMm,
     config.value.mapCrop.polygonSides,
+    config.value.mapCrop.cornerRadiusMm,
     config.value.tray.rimWidthMm,
   ],
   () => {

@@ -17,6 +17,8 @@ export interface TerrainCropRegion {
   /** 圆形半径 / 多边形外接圆半径 (mm)，非圆形为 undefined */
   radiusMm?: number;
   polygonSides?: number;
+  /** 矩形 / 正多边形 R 角 (mm) */
+  cornerRadiusMm?: number;
 }
 
 /** 3D 预览专用：规则高度场，渲染进程本地重建山体 */

@@ -123,6 +123,7 @@ export function useTerrainGeneration(
       config.value.mapCrop.widthMm,
       config.value.mapCrop.polygonSides,
       config.value.mapCrop.polygonSideLengthMm,
+      config.value.mapCrop.cornerRadiusMm,
       config.value.mapCrop.mapCenterLat,
       config.value.mapCrop.mapCenterLon,
       config.value.mapCrop.mapZoom,

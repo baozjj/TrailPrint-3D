@@ -3,6 +3,11 @@ import type { TrayFootprint, Vec2 } from "./tray-footprint";
 import { physicalFootprintMm } from "./crop-region";
 import { computeTerrainCropRegion } from "./crop-region";
 import { regularPolygonVertexAngleRad } from "./footprint";
+import {
+  clampCornerRadiusMm,
+  roundedRectanglePolygon,
+  roundedRegularPolygon,
+} from "./rounded-footprint";
 import { projectTrailToModelMm } from "./trail-coords";
 import { resolveTrailPoints } from "./trail-resolve";
 
@@ -75,20 +80,20 @@ export function computeTerrainPrintPolygon(config: AppConfig): {
   if (mapCrop.shape === "rectangle") {
     const hw = mapCrop.lengthMm / 2;
     const hh = mapCrop.widthMm / 2;
+    const cornerR = clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop);
     return {
       shape: "rectangle",
-      verts: [
-        { x: -hw, y: -hh },
-        { x: hw, y: -hh },
-        { x: hw, y: hh },
-        { x: -hw, y: hh },
-      ],
+      verts: roundedRectanglePolygon(hw, hh, cornerR),
     };
   }
 
   const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
   const r = foot.radiusMm ?? foot.widthMm / 2;
-  return { shape: "polygon", verts: regularPolygonVertices(n, r) };
+  const cornerR = clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop);
+  return {
+    shape: "polygon",
+    verts: roundedRegularPolygon(n, r, cornerR),
+  };
 }
 
 /**

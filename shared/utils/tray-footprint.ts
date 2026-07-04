@@ -1,6 +1,11 @@
 import type { AppConfig, BaseShape } from "../types/config";
 import { physicalFootprintMm } from "./crop-region";
 import { regularPolygonVertexAngleRad } from "./footprint";
+import {
+  clampCornerRadiusMm,
+  roundedRectanglePolygon,
+  roundedRegularPolygon,
+} from "./rounded-footprint";
 
 export interface Vec2 {
   x: number;
@@ -61,26 +66,15 @@ export function computeTrayFootprint(config: AppConfig): TrayFootprint {
   if (mapCrop.shape === "rectangle") {
     const terrainHw = mapCrop.lengthMm / 2;
     const terrainHh = mapCrop.widthMm / 2;
+    const cornerR = clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop);
     const recessHw = terrainHw + tol;
     const recessHh = terrainHh + tol;
     const outerHw = recessHw + rim;
     const outerHh = recessHh + rim;
-    const outer: Vec2[] = [
-      { x: -outerHw, y: -outerHh },
-      { x: outerHw, y: -outerHh },
-      { x: outerHw, y: outerHh },
-      { x: -outerHw, y: outerHh },
-    ];
-    const recessInner: Vec2[] = [
-      { x: -recessHw, y: -recessHh },
-      { x: recessHw, y: -recessHh },
-      { x: recessHw, y: recessHh },
-      { x: -recessHw, y: recessHh },
-    ];
     return {
       shape: "rectangle",
-      outer,
-      recessInner,
+      outer: roundedRectanglePolygon(outerHw, outerHh, cornerR + tol + rim),
+      recessInner: roundedRectanglePolygon(recessHw, recessHh, cornerR + tol),
       outerHw,
       outerHh,
       recessHw,
@@ -90,7 +84,8 @@ export function computeTrayFootprint(config: AppConfig): TrayFootprint {
 
   const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
   const terrainR = foot.radiusMm ?? foot.widthMm / 2;
-  const terrainVerts = regularPolygonVertices(n, terrainR);
+  const cornerR = clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop);
+  const terrainVerts = roundedRegularPolygon(n, terrainR, cornerR);
   const recessScale = (terrainR + tol) / terrainR;
   const outerScale = (terrainR + tol + rim) / terrainR;
   return {

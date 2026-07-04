@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import type { BaseShape } from "@shared/types";
+import { maxCornerRadiusMm } from "@shared/utils/rounded-footprint";
 import { useConfigStore } from "@/stores/config";
 import { useUiStore } from "@/stores/ui";
 import AccordionSection from "@/components/ui/AccordionSection.vue";
@@ -22,6 +23,8 @@ const shapeOptions: { value: BaseShape; label: string }[] = [
 const isCircle = computed(() => config.value.mapCrop.shape === "circle");
 const isRectangle = computed(() => config.value.mapCrop.shape === "rectangle");
 const isPolygon = computed(() => config.value.mapCrop.shape === "polygon");
+const showCornerRadius = computed(() => isRectangle.value || isPolygon.value);
+const maxCornerRadius = computed(() => maxCornerRadiusMm(config.value.mapCrop));
 </script>
 
 <template>
@@ -83,6 +86,17 @@ const isPolygon = computed(() => config.value.mapCrop.shape === "polygon");
           :max="300"
         />
       </template>
+    </div>
+
+    <div v-if="showCornerRadius" class="row">
+      <NumberField
+        v-model="config.mapCrop.cornerRadiusMm"
+        label="R 角"
+        suffix="mm"
+        :min="0"
+        :max="maxCornerRadius"
+        :step="0.5"
+      />
     </div>
   </AccordionSection>
 </template>

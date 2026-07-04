@@ -1,8 +1,9 @@
 import type { MapCropConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
+import { containerPointToLatLng } from "./leaflet-projection";
 import { regularPolygonFootprintMm } from "./footprint";
 import { buildMaskGeometry, type MaskScreenGeometry } from "./mask-geometry";
-import { containerPointToLatLng } from "./leaflet-projection";
+import { clampCornerRadiusMm, roundedRectanglePolygon } from "./rounded-footprint";
 
 export function physicalFootprintMm(mapCrop: MapCropConfig): {
   widthMm: number;
@@ -39,6 +40,13 @@ function maskBoundaryPoints(
     return pts;
   }
   if (mask.kind === "rect" && mask.hw && mask.hh) {
+    const cornerR = mask.cornerR ?? 0;
+    if (cornerR > 0.5) {
+      return roundedRectanglePolygon(mask.hw, mask.hh, cornerR, 8).map((v) => ({
+        x: mask.cx + v.x,
+        y: mask.cy + v.y,
+      }));
+    }
     const { cx, cy, hw, hh } = mask;
     return [
       { x: cx - hw, y: cy - hh },
@@ -113,5 +121,9 @@ export function computeTerrainCropRegion(
     radiusMm: footprint.radiusMm,
     polygonSides:
       mapCrop.shape === "polygon" ? mapCrop.polygonSides : undefined,
+    cornerRadiusMm:
+      mapCrop.shape === "rectangle" || mapCrop.shape === "polygon"
+        ? clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop)
+        : undefined,
   };
 }

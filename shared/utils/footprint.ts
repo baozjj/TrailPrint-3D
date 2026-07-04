@@ -1,5 +1,11 @@
 import type { AppConfig, TrailConfig } from "../types/config";
 import type { TerrainCropRegion } from "../types/terrain";
+import {
+  cornerRadiusFromCrop,
+  pointInRoundedRectangle,
+  roundedRectanglePolygon,
+  roundedRegularPolygon,
+} from "./rounded-footprint";
 import type { TrailPointMm } from "./trail-coords";
 
 function pointInPolygon(
@@ -69,15 +75,16 @@ export function regularPolygonFootprintMm(
 export function buildFootprintPolygonMm(
   crop: TerrainCropRegion,
 ): Array<{ x: number; y: number }> | null {
+  const cornerR = cornerRadiusFromCrop(crop);
+  if (crop.shape === "rectangle") {
+    const hw = crop.widthMm / 2;
+    const hh = crop.heightMm / 2;
+    return roundedRectanglePolygon(hw, hh, cornerR);
+  }
   if (crop.shape === "polygon" && crop.polygonSides) {
     const n = crop.polygonSides;
     const r = crop.radiusMm ?? crop.widthMm / 2;
-    const verts: Array<{ x: number; y: number }> = [];
-    for (let i = 0; i < n; i++) {
-      const a = regularPolygonVertexAngleRad(i, n);
-      verts.push({ x: r * Math.cos(a), y: r * Math.sin(a) });
-    }
-    return verts;
+    return roundedRegularPolygon(n, r, cornerR);
   }
   return null;
 }
@@ -100,6 +107,7 @@ export function projectToFootprintMm(
   if (crop.shape === "rectangle") {
     const hw = crop.widthMm / 2;
     const hh = crop.heightMm / 2;
+    const cornerR = cornerRadiusFromCrop(crop);
     return {
       x: Math.max(-hw, Math.min(hw, xMm)),
       y: Math.max(-hh, Math.min(hh, yMm)),
@@ -151,7 +159,7 @@ export function isInsidePrintFootprintMm(
   if (crop.shape === "rectangle") {
     const hw = crop.widthMm / 2;
     const hh = crop.heightMm / 2;
-    return Math.abs(xMm) <= hw + 1e-6 && Math.abs(yMm) <= hh + 1e-6;
+    return pointInRoundedRectangle(xMm, yMm, hw, hh, cornerRadiusFromCrop(crop));
   }
   if (polygon) return pointInPolygon(xMm, yMm, polygon);
   return true;
@@ -289,7 +297,14 @@ export function clipPolylineToFootprint(
       const r = crop.radiusMm ?? Math.min(crop.widthMm, crop.heightMm) / 2;
       seg = clipSegmentToCircle(a, b, r);
     } else if (crop.shape === "rectangle") {
-      seg = clipSegmentToRect(a, b, crop.widthMm / 2, crop.heightMm / 2);
+      const hw = crop.widthMm / 2;
+      const hh = crop.heightMm / 2;
+      const poly = buildFootprintPolygonMm(crop);
+      if (poly && poly.length >= 3) {
+        seg = clipSegmentToPolygon(a, b, poly);
+      } else {
+        seg = clipSegmentToRect(a, b, hw, hh);
+      }
     } else if (polygon) {
       seg = clipSegmentToPolygon(a, b, polygon);
     } else {

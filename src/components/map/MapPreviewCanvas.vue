@@ -225,6 +225,7 @@ watch(
     config.value.mapCrop.lengthMm,
     config.value.mapCrop.widthMm,
     config.value.mapCrop.polygonSides,
+    config.value.mapCrop.cornerRadiusMm,
     config.value.trail.gpxSimplify,
     config.value.mapCrop.mapCenterLat,
     config.value.mapCrop.mapCenterLon,

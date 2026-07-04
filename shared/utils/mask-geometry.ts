@@ -1,5 +1,9 @@
 import type { MapCropConfig } from "../types/config";
-import { regularPolygonVertexAngleRad } from "./footprint";
+import {
+  clampCornerRadiusMm,
+  roundedRectanglePolygon,
+  roundedRegularPolygon,
+} from "./rounded-footprint";
 
 /**
  * 地图中心遮罩约占视窗短边的比例（屏幕像素，与打印 mm 无关）。
@@ -17,6 +21,7 @@ export interface MaskScreenGeometry {
   r?: number;
   hw?: number;
   hh?: number;
+  cornerR?: number;
   vertices?: Array<{ x: number; y: number }>;
 }
 
@@ -52,18 +57,21 @@ export function buildMaskGeometry(
     const fit = baseR / Math.max(hw, hh);
     hw *= fit;
     hh *= fit;
-    return { kind: "rect", cx, cy, hw, hh };
+    const cornerR =
+      (clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop) /
+        Math.min(mapCrop.lengthMm, mapCrop.widthMm)) *
+      Math.min(hw * 2, hh * 2);
+    return { kind: "rect", cx, cy, hw, hh, cornerR };
   }
 
   const n = Math.max(3, Math.min(8, Math.round(mapCrop.polygonSides)));
-  const vertices: Array<{ x: number; y: number }> = [];
-  for (let i = 0; i < n; i++) {
-    const a = regularPolygonVertexAngleRad(i, n);
-    vertices.push({
-      x: cx + baseR * Math.cos(a),
-      y: cy + baseR * Math.sin(a),
-    });
-  }
+  const sideMm = mapCrop.polygonSideLengthMm;
+  const circumMm =
+    sideMm / (2 * Math.sin(Math.PI / n));
+  const cornerR =
+    (clampCornerRadiusMm(mapCrop.cornerRadiusMm, mapCrop) / circumMm) * baseR;
+  const localVerts = roundedRegularPolygon(n, baseR, cornerR, 5);
+  const vertices = localVerts.map((v) => ({ x: cx + v.x, y: cy + v.y }));
   return { kind: "polygon", cx, cy, vertices };
 }
 
@@ -85,11 +93,23 @@ export function maskEvenOddPath(
     const r = m.r;
     hole = `M ${m.cx} ${m.cy} m -${r},0 a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 Z`;
   } else if (m.kind === "rect" && m.hw && m.hh) {
-    const x1 = m.cx - m.hw;
-    const y1 = m.cy - m.hh;
-    const x2 = m.cx + m.hw;
-    const y2 = m.cy + m.hh;
-    hole = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2} L ${x1} ${y2} Z`;
+    const cornerR = m.cornerR ?? 0;
+    if (cornerR > 0.5) {
+      const verts = roundedRectanglePolygon(m.hw, m.hh, cornerR, 6).map((v) => ({
+        x: m.cx + v.x,
+        y: m.cy + v.y,
+      }));
+      hole =
+        verts
+          .map((v, i) => (i === 0 ? `M ${v.x} ${v.y}` : `L ${v.x} ${v.y}`))
+          .join(" ") + " Z";
+    } else {
+      const x1 = m.cx - m.hw;
+      const y1 = m.cy - m.hh;
+      const x2 = m.cx + m.hw;
+      const y2 = m.cy + m.hh;
+      hole = `M ${x1} ${y1} L ${x2} ${y1} L ${x2} ${y2} L ${x1} ${y2} Z`;
+    }
   } else if (m.vertices?.length) {
     hole =
       m.vertices
@@ -110,6 +130,18 @@ export function maskHoleOutlinePath(
     return `M ${m.cx} ${m.cy} m -${r},0 a ${r},${r} 0 1,0 ${r * 2},0 a ${r},${r} 0 1,0 -${r * 2},0 Z`;
   }
   if (m.kind === "rect" && m.hw && m.hh) {
+    const cornerR = m.cornerR ?? 0;
+    if (cornerR > 0.5) {
+      const verts = roundedRectanglePolygon(m.hw, m.hh, cornerR, 6).map((v) => ({
+        x: m.cx + v.x,
+        y: m.cy + v.y,
+      }));
+      return (
+        verts
+          .map((v, i) => (i === 0 ? `M ${v.x} ${v.y}` : `L ${v.x} ${v.y}`))
+          .join(" ") + " Z"
+      );
+    }
     const x1 = m.cx - m.hw;
     const y1 = m.cy - m.hh;
     const x2 = m.cx + m.hw;
@@ -135,6 +167,18 @@ export function traceMaskPath(
     return;
   }
   if (mask.kind === "rect" && mask.hw && mask.hh) {
+    const cornerR = mask.cornerR ?? 0;
+    if (cornerR > 0.5) {
+      const verts = roundedRectanglePolygon(mask.hw, mask.hh, cornerR, 6);
+      verts.forEach((v, i) => {
+        const x = mask.cx + v.x;
+        const y = mask.cy + v.y;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.closePath();
+      return;
+    }
     ctx.rect(mask.cx - mask.hw, mask.cy - mask.hh, mask.hw * 2, mask.hh * 2);
     return;
   }
