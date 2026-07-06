@@ -11,7 +11,7 @@ If you don't have a 3D printer or prefer a finished physical terrain model based
 - **WeChat ID:** `gg_0328_bao`
 - **WeChat QR code:**
 
-![WeChat QR code](wechat-qr.JPG)
+![WeChat QR code](wechat-qr-new.JPG)
 
 ---
 
@@ -115,13 +115,13 @@ TRAILPRINT_HEAP_MB=8192
 
 ### Other commands
 
-| Command             | Description                              |
-| ------------------- | ---------------------------------------- |
-| `npm run dev`       | Dev mode with hot reload                 |
-| `npm run build`     | Build production output to `out/`        |
-| `npm run preview`   | Preview the built app                    |
+| Command             | Description                                |
+| ------------------- | ------------------------------------------ |
+| `npm run dev`       | Dev mode with hot reload                   |
+| `npm run build`     | Build production output to `out/`          |
+| `npm run preview`   | Preview the built app                      |
 | `npm run package`   | Build and package installers to `release/` |
-| `npm run typecheck` | Run TypeScript type checking             |
+| `npm run typecheck` | Run TypeScript type checking               |
 
 ---
 
@@ -162,12 +162,12 @@ Built for multi-color printing and post-print assembly:
 
 After generation, you get a zip archive containing:
 
-| File | Description | Condition |
-| --- | --- | --- |
-| `Terrain_Main.stl` | Main terrain mesh with base thickness and trail grooves | Always |
-| `Trail_Line.stl` | Separate trail line mesh for color-swap printing | Always |
-| `Tray_Base.stl` | Tray base with inset groove and magnet holes | Always |
-| `Tray_Cover.stl` | NFC / LED cover plate | When NFC is enabled |
+| File               | Description                                             | Condition           |
+| ------------------ | ------------------------------------------------------- | ------------------- |
+| `Terrain_Main.stl` | Main terrain mesh with base thickness and trail grooves | Always              |
+| `Trail_Line.stl`   | Separate trail line mesh for color-swap printing        | Always              |
+| `Tray_Base.stl`    | Tray base with inset groove and magnet holes            | Always              |
+| `Tray_Cover.stl`   | NFC / LED cover plate                                   | When NFC is enabled |
 
 Import the STL files into your slicer, assign colors and print settings, and start making.
 
